@@ -28,18 +28,25 @@ Unity Editor Window  ── HTTP GET ──▶    Lumenvil Lite (.NET 8)
 ```
 lumenvil-lite/
 ├── README.md
-├── server/                     # Windows side (.NET 8 minimal API)
+├── LICENSE
+├── server/                       # Windows side (.NET 8 minimal API)
 │   ├── LumenvilLite.csproj
 │   ├── Program.cs
 │   ├── Endpoints/
 │   ├── Services/
 │   └── Models/
-└── unity-editor-window/        # Unity side (Editor scripts + asmdef)
-    ├── LumenvilLite.Editor.asmdef
-    ├── LumenvilLiteWindow.cs
-    ├── Services/
-    ├── Settings/
-    └── Models/
+└── Unity/
+    └── LumenvilLite/             # Unity side (UPM package)
+        ├── package.json
+        ├── README.md
+        ├── CHANGELOG.md
+        ├── LICENSE.md
+        └── Editor/
+            ├── LumenvilLite.Editor.asmdef
+            ├── LumenvilLiteWindow.cs
+            ├── Services/
+            ├── Settings/
+            └── Models/
 ```
 
 ## Setup
@@ -64,14 +71,23 @@ lumenvil-lite/
 
 ### Unity (any OS)
 
-1. Copy the contents of `unity-editor-window/` into your project under any Editor folder, e.g. `Assets/Editor/LumenvilLite/`.
-2. The asmdef references [UniTask](https://github.com/Cysharp/UniTask) — install it via UPM if your project does not already have it.
-3. In Unity's Player Settings, set **Allow downloads over HTTP** to **Always allowed** (the server speaks plain HTTP on the LAN).
-4. Open **Tools → Lumenvil Lite**.
-5. Click **Settings**, set:
+The Unity side ships as a UPM package under `Unity/LumenvilLite/`.
+
+1. In Unity, open **Window → Package Manager**.
+2. Click **+** → **Add package from git URL...**
+3. Enter:
+   ```
+   https://github.com/ZenoxZX/lumenvil-lite.git?path=Unity/LumenvilLite
+   ```
+   UniTask is declared as a package dependency and pulled in automatically.
+4. In **Player Settings**, set **Allow downloads over HTTP** to **Always allowed** (the server speaks plain HTTP on the LAN).
+5. Open **Tools → Lumenvil Lite**.
+6. Click **Settings**, set:
    - **Host**: the Windows host's mDNS name (e.g. `my-build-pc.local`) or its LAN IP
    - **Port**: `5151` (default)
-6. The connection dot should turn green within a few seconds.
+7. The connection dot should turn green within a few seconds.
+
+See [Unity/LumenvilLite/README.md](Unity/LumenvilLite/README.md) for package details.
 
 ## Quick test from a terminal
 
@@ -92,7 +108,7 @@ curl http://<windows-host>:5151/status
 ## Limitations
 
 - LAN only — there is no authentication. Do not expose port 5151 to the internet.
-- Build status detection is regex-based over `Editor.log`. Edge cases or non-English Unity locales may need tuning in `Services/UnityLogWatcher.cs`.
+- Build status detection is regex-based over `Editor.log`. Edge cases or non-English Unity locales may need tuning in `server/Services/UnityLogWatcher.cs`.
 - Process classification (Editor vs. batch build) requires WMI access to read the command line of `Unity.exe`. If WMI is blocked, the type column falls back to "Unknown".
 
 ## License

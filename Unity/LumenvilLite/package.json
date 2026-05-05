@@ -1,0 +1,22 @@
+{
+  "name": "com.zenoxzx.lumenvil-lite",
+  "version": "0.1.0",
+  "displayName": "Lumenvil Lite",
+  "description": "Editor window that polls a remote Windows build machine over the LAN. Shows reachability, running Unity processes (Editor vs. batch build), and live build status read from Unity's Editor.log. Pairs with the Lumenvil Lite HTTP server in the same repository.",
+  "unity": "2021.3",
+  "category": "Editor Extensions",
+  "keywords": [
+    "editor",
+    "build",
+    "monitoring",
+    "lan",
+    "remote"
+  ],
+  "author": {
+    "name": "Aygün Özgür",
+    "url": "https://github.com/ZenoxZX"
+  },
+  "dependencies": {
+    "com.cysharp.unitask": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask"
+  }
+}
