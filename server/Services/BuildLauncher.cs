@@ -63,6 +63,17 @@ public sealed class BuildLauncher
                 ErrorCode: "project_path_missing");
         }
 
+        var versionFile = Path.Combine(project.ProjectPath, "ProjectSettings", "ProjectVersion.txt");
+        if (!File.Exists(versionFile))
+        {
+            return new BuildStartResponse(
+                Started: false,
+                Build: null,
+                Error: $"'{project.ProjectPath}' does not look like a Unity project (missing ProjectSettings/ProjectVersion.txt). " +
+                       "Re-register the project from Manage Projects with the correct path.",
+                ErrorCode: "project_invalid");
+        }
+
         lock (_lock)
         {
             var existing = ReadStateChecked();
@@ -315,16 +326,31 @@ public sealed class BuildLauncher
     [SupportedOSPlatform("windows")]
     private static string? ProbeStandardLocations(string? version)
     {
-        var candidates = new List<string>();
-        if (!string.IsNullOrEmpty(version))
+        if (string.IsNullOrEmpty(version))
         {
-            candidates.Add($@"C:\Program Files\Unity\Hub\Editor\{version}\Editor\Unity.exe");
-            candidates.Add($@"C:\Program Files\Unity\{version}\Editor\Unity.exe");
+            // No version means we cannot pick the right editor; refuse rather
+            // than guess and accidentally launch a different Unity version.
+            return null;
         }
-        candidates.Add(@"C:\Program Files\Unity\Hub\Editor\Unity.exe");
-        candidates.Add(@"C:\Program Files\Unity\Editor\Unity.exe");
 
-        return candidates.FirstOrDefault(File.Exists);
+        // Standard Unity Hub install roots, in order of likelihood.
+        var hubRoots = new[]
+        {
+            @"C:\Program Files\Unity\Hub\Editor",
+            @"C:\Program Files (x86)\Unity\Hub\Editor",
+            @"D:\Program Files\Unity\Hub\Editor",
+            @"D:\Unity\Hub\Editor"
+        };
+
+        foreach (var root in hubRoots)
+        {
+            var candidate = Path.Combine(root, version, "Editor", "Unity.exe");
+            if (File.Exists(candidate)) return candidate;
+        }
+
+        // Fallback: standalone install (rare).
+        var standalone = $@"C:\Program Files\Unity\{version}\Editor\Unity.exe";
+        return File.Exists(standalone) ? standalone : null;
     }
 
     private static string NormalisePath(string path)
