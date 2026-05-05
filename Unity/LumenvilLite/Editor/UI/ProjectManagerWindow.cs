@@ -1,0 +1,250 @@
+#if UNITY_EDITOR
+using System;
+using System.Threading;
+using Cysharp.Threading.Tasks;
+using LumenvilLite.Models;
+using LumenvilLite.Services;
+using UnityEditor;
+using UnityEngine;
+
+namespace LumenvilLite.UI
+{
+    public class ProjectManagerWindow : EditorWindow
+    {
+        private LumenvilLiteClient _client;
+        private CancellationTokenSource _cts;
+
+        private ProjectEntry[] _projects = Array.Empty<ProjectEntry>();
+        private bool _loading;
+        private string _loadError;
+
+        private string _newName = string.Empty;
+        private string _newProjectPath = string.Empty;
+        private string _newExecuteMethod = string.Empty;
+        private string _addError;
+        private bool _adding;
+
+        private Vector2 _scroll;
+
+        public Action ProjectsChanged;
+
+        public static void Open(Action onChanged)
+        {
+            var window = GetWindow<ProjectManagerWindow>(utility: true, title: "Lumenvil Lite — Projects");
+            window.minSize = new Vector2(520, 360);
+            window.ProjectsChanged = onChanged;
+            window.Show();
+        }
+
+        private void OnEnable()
+        {
+            _client = new LumenvilLiteClient();
+            _cts = new CancellationTokenSource();
+            ReloadAsync().Forget();
+        }
+
+        private void OnDisable()
+        {
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
+        }
+
+        private async UniTaskVoid ReloadAsync()
+        {
+            _loading = true;
+            _loadError = null;
+            Repaint();
+            try
+            {
+                var response = await _client.GetProjectsAsync(_cts.Token);
+                _projects = response?.projects ?? Array.Empty<ProjectEntry>();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _loadError = ex.Message;
+                _projects = Array.Empty<ProjectEntry>();
+            }
+            finally
+            {
+                _loading = false;
+                Repaint();
+            }
+        }
+
+        private void OnGUI()
+        {
+            EditorGUILayout.LabelField("Registered build projects", EditorStyles.boldLabel);
+            EditorGUILayout.Space(2);
+
+            DrawList();
+            EditorGUILayout.Space(8);
+            DrawAddForm();
+
+            EditorGUILayout.Space(6);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Refresh", GUILayout.Width(90)))
+                {
+                    ReloadAsync().Forget();
+                }
+                if (GUILayout.Button("Close", GUILayout.Width(90)))
+                {
+                    Close();
+                }
+            }
+        }
+
+        private void DrawList()
+        {
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                if (_loading)
+                {
+                    EditorGUILayout.LabelField("Loading...");
+                    return;
+                }
+                if (!string.IsNullOrEmpty(_loadError))
+                {
+                    EditorGUILayout.HelpBox($"Failed to load projects: {_loadError}", MessageType.Error);
+                    return;
+                }
+                if (_projects.Length == 0)
+                {
+                    EditorGUILayout.LabelField("No projects yet — add one below.");
+                    return;
+                }
+
+                _scroll = EditorGUILayout.BeginScrollView(_scroll, GUILayout.Height(150));
+                foreach (var project in _projects)
+                {
+                    using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
+                    {
+                        using (new EditorGUILayout.VerticalScope())
+                        {
+                            EditorGUILayout.LabelField(project.name, EditorStyles.boldLabel);
+                            EditorGUILayout.LabelField(project.projectPath, EditorStyles.miniLabel);
+                            EditorGUILayout.LabelField($"executeMethod: {project.executeMethod}", EditorStyles.miniLabel);
+                        }
+                        if (GUILayout.Button("Remove", GUILayout.Width(80), GUILayout.Height(36)))
+                        {
+                            DeleteAsync(project.name).Forget();
+                        }
+                    }
+                }
+                EditorGUILayout.EndScrollView();
+            }
+        }
+
+        private void DrawAddForm()
+        {
+            EditorGUILayout.LabelField("Add a project", EditorStyles.boldLabel);
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                _newName = EditorGUILayout.TextField("Name", _newName);
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    _newProjectPath = EditorGUILayout.TextField("Project path", _newProjectPath);
+                    if (GUILayout.Button("Browse...", GUILayout.Width(80)))
+                    {
+                        var picked = EditorUtility.OpenFolderPanel("Select Unity project root", _newProjectPath, "");
+                        if (!string.IsNullOrEmpty(picked))
+                        {
+                            _newProjectPath = picked;
+                        }
+                    }
+                }
+
+                _newExecuteMethod = EditorGUILayout.TextField(
+                    new GUIContent("Execute method", "Fully qualified static method to run, e.g. BuildScript.BuildFromLumenvil"),
+                    _newExecuteMethod);
+
+                if (!string.IsNullOrEmpty(_addError))
+                {
+                    EditorGUILayout.HelpBox(_addError, MessageType.Error);
+                }
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.FlexibleSpace();
+                    using (new EditorGUI.DisabledScope(_adding))
+                    {
+                        if (GUILayout.Button("Add", GUILayout.Width(120)))
+                        {
+                            AddAsync().Forget();
+                        }
+                    }
+                }
+            }
+        }
+
+        private async UniTaskVoid AddAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_newName) ||
+                string.IsNullOrWhiteSpace(_newProjectPath) ||
+                string.IsNullOrWhiteSpace(_newExecuteMethod))
+            {
+                _addError = "Name, project path and execute method are required.";
+                Repaint();
+                return;
+            }
+
+            _adding = true;
+            _addError = null;
+            Repaint();
+
+            try
+            {
+                await _client.AddProjectAsync(new ProjectEntry
+                {
+                    name = _newName.Trim(),
+                    projectPath = _newProjectPath.Trim(),
+                    executeMethod = _newExecuteMethod.Trim()
+                }, _cts.Token);
+
+                _newName = _newProjectPath = _newExecuteMethod = string.Empty;
+                ProjectsChanged?.Invoke();
+                await ReloadAsync();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _addError = ex.Message;
+            }
+            finally
+            {
+                _adding = false;
+                Repaint();
+            }
+        }
+
+        private async UniTaskVoid DeleteAsync(string name)
+        {
+            if (!EditorUtility.DisplayDialog(
+                    "Remove project",
+                    $"Remove '{name}' from the build list? The Unity project itself is not touched.",
+                    "Remove",
+                    "Cancel"))
+            {
+                return;
+            }
+
+            try
+            {
+                await _client.DeleteProjectAsync(name, _cts.Token);
+                ProjectsChanged?.Invoke();
+                await ReloadAsync();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _loadError = ex.Message;
+                Repaint();
+            }
+        }
+    }
+}
+#endif

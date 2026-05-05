@@ -46,9 +46,11 @@ lumenvil-lite/
         └── Editor/
             ├── LumenvilLite.Editor.asmdef
             ├── LumenvilLiteWindow.cs
+            ├── Models/
             ├── Services/
             ├── Settings/
-            └── Models/
+            └── UI/
+                └── ProjectManagerWindow.cs
 ```
 
 ## Setup
@@ -127,12 +129,74 @@ curl http://<windows-host>:5151/status
 
 ## Endpoints
 
-| Method | Path      | Purpose                                                              |
-|--------|-----------|----------------------------------------------------------------------|
-| GET    | `/health` | Server identity, uptime, hostname                                    |
-| GET    | `/unity`  | Running Unity processes (Editor vs. BatchBuild, RAM, uptime, path)   |
-| GET    | `/build`  | Current build status from the Unity log + tail of recent log lines   |
-| GET    | `/status` | Aggregated `health` + `unity` + `build` (used by the editor window)  |
+| Method | Path                  | Purpose                                                              |
+|--------|-----------------------|----------------------------------------------------------------------|
+| GET    | `/health`             | Server identity, uptime, hostname                                    |
+| GET    | `/unity`              | Running Unity processes (Editor vs. BatchBuild, RAM, uptime, path)   |
+| GET    | `/build`              | Current build status from the Unity log + tail of recent log lines   |
+| GET    | `/status`             | Aggregated `health` + `unity` + `build` (used by the editor window)  |
+| POST   | `/unity/{pid}/kill`   | Quit (graceful) or force-kill a Unity process                        |
+| GET    | `/projects`           | List build projects                                                  |
+| POST   | `/projects`           | Register a build project (`name`, `projectPath`, `executeMethod`)    |
+| DELETE | `/projects/{name}`    | Remove a project                                                     |
+| POST   | `/build/start`        | Launch a batch-mode Unity build                                      |
+| GET    | `/build/active`       | Active build info or null                                            |
+| POST   | `/build/cancel`       | Kill the active build                                                |
+
+## Build script contract
+
+`POST /build/start` invokes Unity in batch mode and runs your registered `executeMethod`.
+Lumenvil Lite passes these custom CLI arguments alongside Unity's own:
+
+| Argument             | Value                                                              |
+|----------------------|--------------------------------------------------------------------|
+| `-lumenvilTarget`    | The build target (currently `StandaloneWindows64`)                 |
+| `-lumenvilBackend`   | `Il2cpp` or `Mono`                                                 |
+| `-lumenvilOutput`    | Output directory, already created under `C:\Builds\<project>\...`  |
+| `-lumenvilDefines`   | Semicolon-separated scripting defines (only when non-empty)        |
+
+Your build script reads them with `Environment.GetCommandLineArgs()` and writes the player into the supplied output path. Example:
+
+```csharp
+public static class BuildScript
+{
+    public static void BuildFromLumenvil()
+    {
+        var args = System.Environment.GetCommandLineArgs();
+        string GetArg(string name)
+        {
+            for (int i = 0; i < args.Length - 1; i++)
+                if (args[i] == name) return args[i + 1];
+            return null;
+        }
+
+        var target  = GetArg("-lumenvilTarget");
+        var backend = GetArg("-lumenvilBackend");
+        var output  = GetArg("-lumenvilOutput");
+        var defines = GetArg("-lumenvilDefines");
+
+        var buildTarget = (BuildTarget)System.Enum.Parse(typeof(BuildTarget), target);
+        var group = BuildPipeline.GetBuildTargetGroup(buildTarget);
+
+        PlayerSettings.SetScriptingBackend(group,
+            backend == "Il2cpp"
+                ? ScriptingImplementation.IL2CPP
+                : ScriptingImplementation.Mono2x);
+
+        if (!string.IsNullOrEmpty(defines))
+            PlayerSettings.SetScriptingDefineSymbolsForGroup(group, defines);
+
+        var scenes = EditorBuildSettings.scenes
+            .Where(s => s.enabled).Select(s => s.path).ToArray();
+
+        BuildPipeline.BuildPlayer(scenes,
+            System.IO.Path.Combine(output, "Game.exe"),
+            buildTarget, BuildOptions.None);
+    }
+}
+```
+
+Register the project with `executeMethod = "BuildScript.BuildFromLumenvil"` from the Lumenvil Lite editor window's **Manage Projects...** popup.
 
 ## Limitations
 

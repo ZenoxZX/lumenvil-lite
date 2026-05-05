@@ -5,6 +5,7 @@ using Cysharp.Threading.Tasks;
 using LumenvilLite.Models;
 using LumenvilLite.Services;
 using LumenvilLite.Settings;
+using LumenvilLite.UI;
 using UnityEditor;
 using UnityEngine;
 
@@ -28,6 +29,20 @@ namespace LumenvilLite
         private string _previousBuildStatus;
         private DateTime _lastTransitionTime;
         private int _killInFlightPid = -1;
+
+        // Build trigger state.
+        private static readonly string[] BuildTargets = { "StandaloneWindows64" };
+        private static readonly string[] BuildBackends = { "Il2cpp", "Mono" };
+        private ProjectEntry[] _projects = Array.Empty<ProjectEntry>();
+        private int _selectedProjectIndex;
+        private int _selectedTargetIndex;
+        private int _selectedBackendIndex;
+        private string _buildDefines = string.Empty;
+        private bool _buildStartInFlight;
+        private bool _buildCancelInFlight;
+        private string _buildTriggerMessage;
+        private double _lastProjectsRefresh;
+        private const double ProjectsRefreshInterval = 30;
 
         private Vector2 _scrollPosition;
 
@@ -157,6 +172,7 @@ namespace LumenvilLite
 
             _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
             DrawUnityPanel();
+            DrawBuildTriggerPanel();
             DrawBuildPanel();
             EditorGUILayout.EndScrollView();
 
@@ -321,6 +337,243 @@ namespace LumenvilLite
                 _killInFlightPid = -1;
                 Repaint();
             }
+        }
+
+        private void DrawBuildTriggerPanel()
+        {
+            EditorGUILayout.BeginVertical(_cardStyle);
+
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("Build Trigger", _sectionHeaderStyle);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Manage Projects...", GUILayout.Width(150)))
+            {
+                ProjectManagerWindow.Open(() => RefreshProjectsAsync(force: true).Forget());
+            }
+            EditorGUILayout.EndHorizontal();
+
+            MaybeRefreshProjects();
+
+            if (_projects.Length == 0)
+            {
+                EditorGUILayout.LabelField(
+                    "No projects registered yet. Use 'Manage Projects...' to add one.",
+                    _labelMutedStyle);
+                EditorGUILayout.EndVertical();
+                return;
+            }
+
+            // Project dropdown.
+            var projectNames = new string[_projects.Length];
+            for (int i = 0; i < _projects.Length; i++)
+            {
+                projectNames[i] = _projects[i].name ?? "(unnamed)";
+            }
+            _selectedProjectIndex = Mathf.Clamp(_selectedProjectIndex, 0, _projects.Length - 1);
+            _selectedProjectIndex = EditorGUILayout.Popup("Project", _selectedProjectIndex, projectNames);
+
+            // Target dropdown.
+            _selectedTargetIndex = EditorGUILayout.Popup("Target", _selectedTargetIndex, BuildTargets);
+
+            // Backend dropdown.
+            _selectedBackendIndex = EditorGUILayout.Popup("Backend", _selectedBackendIndex, BuildBackends);
+
+            // Defines.
+            _buildDefines = EditorGUILayout.TextField(
+                new GUIContent("Defines", "Optional, semicolon-separated. Leave empty to skip."),
+                _buildDefines);
+
+            if (!string.IsNullOrEmpty(_buildTriggerMessage))
+            {
+                EditorGUILayout.HelpBox(_buildTriggerMessage, MessageType.Info);
+            }
+
+            EditorGUILayout.BeginHorizontal();
+            using (new EditorGUI.DisabledScope(_buildStartInFlight || _buildCancelInFlight))
+            {
+                if (GUILayout.Button("Start Build", GUILayout.Height(28)))
+                {
+                    StartBuildAsync().Forget();
+                }
+            }
+            using (new EditorGUI.DisabledScope(_buildStartInFlight || _buildCancelInFlight))
+            {
+                if (GUILayout.Button("Cancel Build", GUILayout.Height(28)))
+                {
+                    CancelBuildAsync().Forget();
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.EndVertical();
+        }
+
+        private void MaybeRefreshProjects()
+        {
+            if (EditorApplication.timeSinceStartup - _lastProjectsRefresh > ProjectsRefreshInterval)
+            {
+                RefreshProjectsAsync(force: false).Forget();
+            }
+        }
+
+        private async UniTaskVoid RefreshProjectsAsync(bool force)
+        {
+            _lastProjectsRefresh = EditorApplication.timeSinceStartup;
+            try
+            {
+                var response = await _client.GetProjectsAsync(_pollCts.Token);
+                _projects = response?.projects ?? Array.Empty<ProjectEntry>();
+                Repaint();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                if (force)
+                {
+                    _buildTriggerMessage = $"Failed to load projects: {ShortenError(ex.Message)}";
+                    Repaint();
+                }
+            }
+        }
+
+        private async UniTaskVoid StartBuildAsync()
+        {
+            if (_projects.Length == 0)
+            {
+                return;
+            }
+            var project = _projects[_selectedProjectIndex];
+            var target  = BuildTargets[_selectedTargetIndex];
+            var backend = BuildBackends[_selectedBackendIndex];
+
+            // Local pre-check: if our last status snapshot already shows the
+            // editor open on this project, prompt the user before we even hit
+            // the server.
+            if (IsEditorOpenOnProject(project.projectPath, out var openPid))
+            {
+                EditorUtility.DisplayDialog(
+                    "Editor open",
+                    $"A Unity Editor instance (pid {openPid}) is already open on '{project.projectPath}'.\n\n" +
+                    "Quit it from the Unity panel before starting a build.",
+                    "OK");
+                return;
+            }
+
+            var defines = string.IsNullOrWhiteSpace(_buildDefines) ? null : _buildDefines.Trim();
+            var prompt =
+                $"Start build for '{project.name}'?\n\n" +
+                $"Target:  {target}\n" +
+                $"Backend: {backend}\n" +
+                (string.IsNullOrEmpty(defines) ? string.Empty : $"Defines: {defines}\n") +
+                $"Method:  {project.executeMethod}";
+
+            if (!EditorUtility.DisplayDialog("Start build", prompt, "Start", "Cancel"))
+            {
+                return;
+            }
+
+            _buildStartInFlight = true;
+            _buildTriggerMessage = null;
+            Repaint();
+            try
+            {
+                var response = await _client.StartBuildAsync(new BuildStartRequest
+                {
+                    projectName = project.name,
+                    target = target,
+                    backend = backend,
+                    defines = defines
+                }, _pollCts.Token);
+
+                if (response != null && response.started)
+                {
+                    var info = response.build;
+                    var output = info != null ? info.outputPath : "(unknown path)";
+                    ShowNotification(new GUIContent($"Build started: {project.name}"));
+                    _buildTriggerMessage = $"Build pid {info?.pid}, output: {output}";
+                    _lastPollTime = 0;
+                }
+                else
+                {
+                    var err = response?.error ?? "Unknown error.";
+                    _buildTriggerMessage = err;
+                    EditorUtility.DisplayDialog("Build refused", err, "OK");
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (LumenvilLiteRequestException ex)
+            {
+                _buildTriggerMessage = ShortenError(ex.Message);
+                EditorUtility.DisplayDialog("Build request failed", ex.Message, "OK");
+            }
+            finally
+            {
+                _buildStartInFlight = false;
+                Repaint();
+            }
+        }
+
+        private async UniTaskVoid CancelBuildAsync()
+        {
+            if (!EditorUtility.DisplayDialog(
+                    "Cancel build",
+                    "Kill the active build process? The partial output folder will remain on disk.",
+                    "Cancel Build",
+                    "Keep Running"))
+            {
+                return;
+            }
+
+            _buildCancelInFlight = true;
+            Repaint();
+            try
+            {
+                var response = await _client.CancelBuildAsync(_pollCts.Token);
+                if (response != null && response.cancelled)
+                {
+                    ShowNotification(new GUIContent("Build cancelled"));
+                    _buildTriggerMessage = null;
+                    _lastPollTime = 0;
+                }
+                else
+                {
+                    var err = response?.error ?? "Cancel failed.";
+                    _buildTriggerMessage = err;
+                    EditorUtility.DisplayDialog("Cancel failed", err, "OK");
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (LumenvilLiteRequestException ex)
+            {
+                _buildTriggerMessage = ShortenError(ex.Message);
+                EditorUtility.DisplayDialog("Cancel request failed", ex.Message, "OK");
+            }
+            finally
+            {
+                _buildCancelInFlight = false;
+                Repaint();
+            }
+        }
+
+        private bool IsEditorOpenOnProject(string projectPath, out int pid)
+        {
+            pid = 0;
+            if (string.IsNullOrEmpty(projectPath) || _lastStatus?.unity?.processes == null)
+            {
+                return false;
+            }
+            var normalized = projectPath.Replace('/', '\\').TrimEnd('\\');
+            foreach (var p in _lastStatus.unity.processes)
+            {
+                if (p.type != "Editor" || string.IsNullOrEmpty(p.projectPath)) continue;
+                var candidate = p.projectPath.Replace('/', '\\').TrimEnd('\\');
+                if (string.Equals(candidate, normalized, StringComparison.OrdinalIgnoreCase))
+                {
+                    pid = p.pid;
+                    return true;
+                }
+            }
+            return false;
         }
 
         private void DrawBuildPanel()

@@ -68,5 +68,62 @@ namespace LumenvilLite.Models
         public int exitCode;
         public string error;
     }
+
+    [Serializable]
+    public class ProjectEntry
+    {
+        public string name;
+        public string projectPath;
+        public string executeMethod;
+    }
+
+    [Serializable]
+    public class ProjectListResponse
+    {
+        public ProjectEntry[] projects;
+    }
+
+    [Serializable]
+    public class BuildStartRequest
+    {
+        public string projectName;
+        public string target;
+        public string backend;   // "Il2cpp" or "Mono"
+        public string defines;
+    }
+
+    [Serializable]
+    public class ActiveBuildInfo
+    {
+        public string projectName;
+        public string target;
+        public string backend;
+        public string outputPath;
+        public string logFilePath;
+        public int pid;
+        public string startedAtUtc;
+    }
+
+    [Serializable]
+    public class BuildStartResponse
+    {
+        public bool started;
+        public ActiveBuildInfo build;
+        public string error;
+        public string errorCode;
+    }
+
+    [Serializable]
+    public class ActiveBuildResponse
+    {
+        public ActiveBuildInfo active;
+    }
+
+    [Serializable]
+    public class BuildCancelResponse
+    {
+        public bool cancelled;
+        public string error;
+    }
 }
 #endif

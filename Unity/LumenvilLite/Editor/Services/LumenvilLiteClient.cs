@@ -23,47 +23,147 @@ namespace LumenvilLite.Services
 
         public async UniTask<KillResponse> KillUnityProcessAsync(int pid, bool force, CancellationToken cancellationToken)
         {
-            var url = LumenvilLiteSettings.BaseUrl + $"/unity/{pid}/kill";
             var payload = JsonUtility.ToJson(new KillRequest { force = force });
-            var bodyBytes = System.Text.Encoding.UTF8.GetBytes(payload);
+            return await SendJsonAsync<KillResponse>(
+                method: UnityWebRequest.kHttpVerbPOST,
+                path: $"/unity/{pid}/kill",
+                jsonBody: payload,
+                cancellationToken: cancellationToken,
+                timeoutMultiplier: 3,
+                allow409Body: false);
+        }
 
-            using var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST);
-            request.uploadHandler = new UploadHandlerRaw(bodyBytes) { contentType = "application/json" };
+        public async UniTask<ProjectListResponse> GetProjectsAsync(CancellationToken cancellationToken)
+        {
+            return await GetJsonAsync<ProjectListResponse>("/projects", cancellationToken);
+        }
+
+        public async UniTask<ProjectEntry> AddProjectAsync(ProjectEntry entry, CancellationToken cancellationToken)
+        {
+            var payload = JsonUtility.ToJson(entry);
+            return await SendJsonAsync<ProjectEntry>(
+                method: UnityWebRequest.kHttpVerbPOST,
+                path: "/projects",
+                jsonBody: payload,
+                cancellationToken: cancellationToken,
+                timeoutMultiplier: 1,
+                allow409Body: false);
+        }
+
+        public async UniTask DeleteProjectAsync(string name, CancellationToken cancellationToken)
+        {
+            await SendJsonAsync<EmptyBody>(
+                method: UnityWebRequest.kHttpVerbDELETE,
+                path: $"/projects/{UnityWebRequest.EscapeURL(name)}",
+                jsonBody: null,
+                cancellationToken: cancellationToken,
+                timeoutMultiplier: 1,
+                allow409Body: false,
+                allowEmptyResponse: true);
+        }
+
+        public async UniTask<BuildStartResponse> StartBuildAsync(BuildStartRequest body, CancellationToken cancellationToken)
+        {
+            var payload = JsonUtility.ToJson(body);
+            return await SendJsonAsync<BuildStartResponse>(
+                method: UnityWebRequest.kHttpVerbPOST,
+                path: "/build/start",
+                jsonBody: payload,
+                cancellationToken: cancellationToken,
+                timeoutMultiplier: 2,
+                allow409Body: true);
+        }
+
+        public async UniTask<ActiveBuildResponse> GetActiveBuildAsync(CancellationToken cancellationToken)
+        {
+            return await GetJsonAsync<ActiveBuildResponse>("/build/active", cancellationToken);
+        }
+
+        public async UniTask<BuildCancelResponse> CancelBuildAsync(CancellationToken cancellationToken)
+        {
+            return await SendJsonAsync<BuildCancelResponse>(
+                method: UnityWebRequest.kHttpVerbPOST,
+                path: "/build/cancel",
+                jsonBody: null,
+                cancellationToken: cancellationToken,
+                timeoutMultiplier: 2,
+                allow409Body: true);
+        }
+
+        [Serializable]
+        private class EmptyBody { }
+
+        private static async UniTask<T> SendJsonAsync<T>(
+            string method,
+            string path,
+            string jsonBody,
+            CancellationToken cancellationToken,
+            int timeoutMultiplier,
+            bool allow409Body,
+            bool allowEmptyResponse = false)
+            where T : class
+        {
+            var url = LumenvilLiteSettings.BaseUrl + path;
+            using var request = new UnityWebRequest(url, method);
+            if (!string.IsNullOrEmpty(jsonBody))
+            {
+                var bodyBytes = System.Text.Encoding.UTF8.GetBytes(jsonBody);
+                request.uploadHandler = new UploadHandlerRaw(bodyBytes) { contentType = "application/json" };
+            }
             request.downloadHandler = new DownloadHandlerBuffer();
-            // Graceful kill on the server waits up to 5s for Unity to close,
-            // so the client timeout has to be larger than the normal poll one.
-            request.timeout = Mathf.Max(10, Mathf.RoundToInt(LumenvilLiteSettings.TimeoutSeconds * 3));
+            request.timeout = Mathf.Max(5, Mathf.RoundToInt(LumenvilLiteSettings.TimeoutSeconds * timeoutMultiplier));
 
             try
             {
                 await request.SendWebRequest().ToUniTask(cancellationToken: cancellationToken);
             }
-            catch (UnityWebRequestException ex)
+            catch (UnityWebRequestException)
             {
+                // UnityWebRequest treats non-2xx as exceptions but we still want to
+                // read the body for some semantic 4xx responses (409, 422). For the
+                // others we re-throw with the body attached for context.
+                var status = request.responseCode;
+                var body = request.downloadHandler?.text ?? string.Empty;
+                if (allow409Body && (status == 409 || status == 422 || status == 400))
+                {
+                    return ParseOrThrow<T>(body, url);
+                }
                 throw new LumenvilLiteRequestException(
-                    $"Kill request to {url} failed: {ex.Error}", ex);
+                    $"Request {method} {url} failed: HTTP {status}{(string.IsNullOrEmpty(body) ? string.Empty : " — " + body)}");
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
 
             if (request.result != UnityWebRequest.Result.Success)
             {
                 throw new LumenvilLiteRequestException(
-                    $"Kill request to {url} failed: {request.error} (result: {request.result})");
+                    $"Request {method} {url} failed: {request.error} (result: {request.result})");
             }
 
             var json = request.downloadHandler?.text ?? string.Empty;
             if (string.IsNullOrEmpty(json))
             {
+                if (allowEmptyResponse)
+                {
+                    return null!;
+                }
                 throw new LumenvilLiteRequestException($"Empty response from {url}");
             }
+            return ParseOrThrow<T>(json, url);
+        }
 
+        private static T ParseOrThrow<T>(string json, string url) where T : class
+        {
             try
             {
-                return JsonUtility.FromJson<KillResponse>(json);
+                return JsonUtility.FromJson<T>(json);
             }
             catch (Exception ex)
             {
                 throw new LumenvilLiteRequestException(
-                    $"Failed to parse kill response from {url}: {ex.Message}", ex);
+                    $"Failed to parse JSON from {url}: {ex.Message}", ex);
             }
         }
 
