@@ -74,6 +74,46 @@ public sealed class ProjectStore
         }
     }
 
+    /// <summary>
+    /// Replaces the entry whose key is <paramref name="name"/> with
+    /// <paramref name="updated"/>. The key is matched case-insensitively
+    /// and the new entry's name overwrites it (so renames are allowed,
+    /// as long as the new name does not collide with another entry).
+    /// </summary>
+    public ProjectEntry? Update(string name, ProjectEntry updated)
+    {
+        if (string.IsNullOrWhiteSpace(updated.Name))
+        {
+            throw new ArgumentException("Project name is required.");
+        }
+        if (string.IsNullOrWhiteSpace(updated.ProjectPath))
+        {
+            throw new ArgumentException("Project path is required.");
+        }
+
+        lock (_lock)
+        {
+            var current = ReadAll().ToList();
+            var index = current.FindIndex(p =>
+                string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+            {
+                return null;
+            }
+
+            var renaming = !string.Equals(current[index].Name, updated.Name, StringComparison.OrdinalIgnoreCase);
+            if (renaming && current.Any(p =>
+                    string.Equals(p.Name, updated.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException($"Project '{updated.Name}' already exists.");
+            }
+
+            current[index] = updated;
+            WriteAll(current);
+            return updated;
+        }
+    }
+
     private static IReadOnlyList<ProjectEntry> ReadAll()
     {
         StoragePaths.EnsureRoot();

@@ -50,6 +50,18 @@ namespace LumenvilLite.Services
                 allow409Body: false);
         }
 
+        public async UniTask<ProjectEntry> UpdateProjectAsync(string originalName, ProjectEntry entry, CancellationToken cancellationToken)
+        {
+            var payload = JsonUtility.ToJson(entry);
+            return await SendJsonAsync<ProjectEntry>(
+                method: UnityWebRequest.kHttpVerbPUT,
+                path: $"/projects/{Uri.EscapeDataString(originalName)}",
+                jsonBody: payload,
+                cancellationToken: cancellationToken,
+                timeoutMultiplier: 1,
+                allow409Body: false);
+        }
+
         public async UniTask DeleteProjectAsync(string name, CancellationToken cancellationToken)
         {
             await SendJsonAsync<EmptyBody>(

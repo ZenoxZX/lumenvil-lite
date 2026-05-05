@@ -24,6 +24,10 @@ namespace LumenvilLite.UI
         private string _addError;
         private bool _adding;
 
+        // Edit mode: when set, the Add form acts as an Update form for the
+        // entry whose original key is _editingOriginalName.
+        private string _editingOriginalName;
+
         private Vector2 _scroll;
 
         public Action ProjectsChanged;
@@ -133,9 +137,16 @@ namespace LumenvilLite.UI
                                 : $"executeMethod: {project.executeMethod}";
                             EditorGUILayout.LabelField(methodLabel, EditorStyles.miniLabel);
                         }
-                        if (GUILayout.Button("Remove", GUILayout.Width(80), GUILayout.Height(36)))
+                        using (new EditorGUILayout.VerticalScope(GUILayout.Width(80)))
                         {
-                            DeleteAsync(project.name).Forget();
+                            if (GUILayout.Button("Edit"))
+                            {
+                                BeginEdit(project);
+                            }
+                            if (GUILayout.Button("Remove"))
+                            {
+                                DeleteAsync(project.name).Forget();
+                            }
                         }
                     }
                 }
@@ -145,7 +156,9 @@ namespace LumenvilLite.UI
 
         private void DrawAddForm()
         {
-            EditorGUILayout.LabelField("Add a project", EditorStyles.boldLabel);
+            var editing = !string.IsNullOrEmpty(_editingOriginalName);
+            var heading = editing ? $"Edit '{_editingOriginalName}'" : "Add a project";
+            EditorGUILayout.LabelField(heading, EditorStyles.boldLabel);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
                 _newName = EditorGUILayout.TextField("Name", _newName);
@@ -180,18 +193,40 @@ namespace LumenvilLite.UI
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     GUILayout.FlexibleSpace();
+                    if (editing && GUILayout.Button("Cancel", GUILayout.Width(90)))
+                    {
+                        ClearEdit();
+                    }
                     using (new EditorGUI.DisabledScope(_adding))
                     {
-                        if (GUILayout.Button("Add", GUILayout.Width(120)))
+                        if (GUILayout.Button(editing ? "Update" : "Add", GUILayout.Width(120)))
                         {
-                            AddAsync().Forget();
+                            SubmitAsync().Forget();
                         }
                     }
                 }
             }
         }
 
-        private async UniTaskVoid AddAsync()
+        private void BeginEdit(ProjectEntry entry)
+        {
+            _editingOriginalName = entry.name;
+            _newName = entry.name ?? string.Empty;
+            _newProjectPath = entry.projectPath ?? string.Empty;
+            _newExecuteMethod = entry.executeMethod ?? string.Empty;
+            _addError = null;
+            Repaint();
+        }
+
+        private void ClearEdit()
+        {
+            _editingOriginalName = null;
+            _newName = _newProjectPath = _newExecuteMethod = string.Empty;
+            _addError = null;
+            Repaint();
+        }
+
+        private async UniTaskVoid SubmitAsync()
         {
             if (string.IsNullOrWhiteSpace(_newName) ||
                 string.IsNullOrWhiteSpace(_newProjectPath))
@@ -205,16 +240,25 @@ namespace LumenvilLite.UI
             _addError = null;
             Repaint();
 
+            var entry = new ProjectEntry
+            {
+                name = _newName.Trim(),
+                projectPath = _newProjectPath.Trim(),
+                executeMethod = (_newExecuteMethod ?? string.Empty).Trim()
+            };
+
             try
             {
-                await _client.AddProjectAsync(new ProjectEntry
+                if (string.IsNullOrEmpty(_editingOriginalName))
                 {
-                    name = _newName.Trim(),
-                    projectPath = _newProjectPath.Trim(),
-                    executeMethod = _newExecuteMethod.Trim()
-                }, _cts.Token);
+                    await _client.AddProjectAsync(entry, _cts.Token);
+                }
+                else
+                {
+                    await _client.UpdateProjectAsync(_editingOriginalName, entry, _cts.Token);
+                }
 
-                _newName = _newProjectPath = _newExecuteMethod = string.Empty;
+                ClearEdit();
                 ProjectsChanged?.Invoke();
                 await ReloadAsync();
             }

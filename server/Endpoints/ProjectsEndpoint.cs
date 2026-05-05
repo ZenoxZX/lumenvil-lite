@@ -27,6 +27,27 @@ public static class ProjectsEndpoint
             }
         });
 
+        app.MapPut("/projects/{name}", (string name, ProjectEntry entry, ProjectStore store) =>
+        {
+            try
+            {
+                var updated = store.Update(name, entry);
+                if (updated == null)
+                {
+                    return Results.NotFound(new { error = $"Project '{name}' not found." });
+                }
+                return Results.Ok(updated);
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Conflict(new { error = ex.Message });
+            }
+        });
+
         app.MapDelete("/projects/{name}", (string name, ProjectStore store) =>
         {
             return store.Remove(name)
