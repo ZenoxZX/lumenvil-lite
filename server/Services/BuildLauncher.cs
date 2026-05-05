@@ -17,7 +17,10 @@ public sealed class BuildLauncher
     };
 
     private static readonly string[] AllowedTargets = { "StandaloneWindows64" };
-    public const string DefaultExecuteMethod = "LumenvilLite.Editor.Build.LumenvilLiteBuilder.Build";
+    // Unity's -executeMethod parser expects 'ClassName.MethodName' (it
+    // refuses dotted namespace paths). The package class lives in
+    // LumenvilLite.Editor.Build but we hand Unity only the leaf names.
+    public const string DefaultExecuteMethod = "LumenvilLiteBuilder.Build";
 
     private readonly UnityProcessScanner _scanner;
     private readonly object _lock = new();

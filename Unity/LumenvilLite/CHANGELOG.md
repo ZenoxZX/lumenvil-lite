@@ -10,7 +10,7 @@ and this package adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - **Build Trigger** card on the main editor window — pick a registered project, target (currently `StandaloneWindows64`), scripting backend (`Il2cpp` / `Mono`), optional defines, and start a remote build.
 - **Manage Projects...** popup (`ProjectManagerWindow`) for adding, listing, **editing**, and removing build projects on the server. `executeMethod` is now optional — leave it empty to fall back to the package's built-in builder.
-- **Built-in builder** at `LumenvilLite.Editor.Build.LumenvilLiteBuilder.Build`: reads the `-lumenvil*` args, applies the requested backend / defines, builds the scenes enabled in `EditorBuildSettings`, and exits non-zero on failure. Doubles as a starter template — copy it into your own project to add Addressables, version stamping, etc.
+- **Built-in builder** `LumenvilLiteBuilder.Build` (namespace `LumenvilLite.Editor.Build`): reads the `-lumenvil*` args, applies the requested backend / defines, builds the scenes enabled in `EditorBuildSettings`, and exits non-zero on failure. Doubles as a starter template — copy it into your own project to add Addressables, version stamping, etc. Note: Unity's `-executeMethod` parser only accepts `ClassName.MethodName`, not dotted namespace paths.
 - Build outcome is now driven by the spawned Unity process's exit code (with a polling fallback) and surfaced through `lastBuild` on `/status`. The window shows a coloured banner (success / failed / cancelled), the exit code, and timestamps.
 - Cancel button that kills the active build process via the server.
 - Pre-flight check that warns the user if a Unity Editor is already open on the same project path before sending a build request.

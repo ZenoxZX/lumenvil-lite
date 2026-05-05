@@ -179,7 +179,7 @@ namespace LumenvilLite.UI
                 _newExecuteMethod = EditorGUILayout.TextField(
                     new GUIContent("Execute method (optional)",
                         "Fully qualified static method, e.g. BuildScript.BuildFromLumenvil. " +
-                        "Leave empty to use the built-in LumenvilLite.Editor.Build.LumenvilLiteBuilder.Build."),
+                        "Leave empty to use the built-in LumenvilLiteBuilder.Build."),
                     _newExecuteMethod);
                 EditorGUILayout.LabelField(
                     "Leave empty to use the built-in builder.",
