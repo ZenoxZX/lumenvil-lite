@@ -562,6 +562,20 @@ namespace LumenvilLite
             }
         }
 
+        private void DrawCopyLogButton(BuildStatusResponse build)
+        {
+            var hasLines = build?.logTail != null && build.logTail.Length > 0;
+            using (new EditorGUI.DisabledScope(!hasLines))
+            {
+                if (GUILayout.Button("Copy Log", GUILayout.Width(80)))
+                {
+                    var text = string.Join("\n", build.logTail);
+                    EditorGUIUtility.systemCopyBuffer = text;
+                    ShowNotification(new GUIContent($"{build.logTail.Length} log lines copied"));
+                }
+            }
+        }
+
         private void DrawBuildResultBanner(string status)
         {
             string label;
@@ -653,11 +667,7 @@ namespace LumenvilLite
                     _labelMutedStyle);
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField($"Output: {active.outputPath}", _labelMutedStyle);
-                if (GUILayout.Button("Copy", GUILayout.Width(50)))
-                {
-                    EditorGUIUtility.systemCopyBuffer = active.outputPath;
-                    ShowNotification(new GUIContent("Output path copied"));
-                }
+                DrawCopyLogButton(build);
                 EditorGUILayout.EndHorizontal();
             }
             else if (last != null && !string.IsNullOrEmpty(last.outputPath))
@@ -667,11 +677,7 @@ namespace LumenvilLite
                     _labelMutedStyle);
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField($"Output: {last.outputPath}", _labelMutedStyle);
-                if (GUILayout.Button("Copy", GUILayout.Width(50)))
-                {
-                    EditorGUIUtility.systemCopyBuffer = last.outputPath;
-                    ShowNotification(new GUIContent("Output path copied"));
-                }
+                DrawCopyLogButton(build);
                 EditorGUILayout.EndHorizontal();
                 EditorGUILayout.LabelField(
                     $"Exit code: {last.exitCode}    Started: {last.startedAtUtc}    Finished: {last.finishedAtUtc}",
