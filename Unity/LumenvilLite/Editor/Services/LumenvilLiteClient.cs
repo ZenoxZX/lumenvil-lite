@@ -54,7 +54,7 @@ namespace LumenvilLite.Services
         {
             await SendJsonAsync<EmptyBody>(
                 method: UnityWebRequest.kHttpVerbDELETE,
-                path: $"/projects/{UnityWebRequest.EscapeURL(name)}",
+                path: $"/projects/{Uri.EscapeDataString(name)}",
                 jsonBody: null,
                 cancellationToken: cancellationToken,
                 timeoutMultiplier: 1,

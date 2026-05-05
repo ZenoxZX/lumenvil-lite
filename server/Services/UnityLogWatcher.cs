@@ -9,16 +9,16 @@ public sealed class UnityLogWatcher
     private const int IdleAfterMinutes = 30;
 
     private static readonly Regex BuildStartRegex = new(
-        @"(Building Player|BuildPlayer|Build started)",
+        @"(Building Player|BuildPlayer|Build started|Tundra build|Beginning Player Build)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex BuildSuccessRegex = new(
-        @"(Build succeeded|Build Report|Build completed with a result of 'Succeeded')",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        @"(Build succeeded|Build completed with a result of 'Succeeded'|\*\*\* Tundra build success|Build Report\b.*Build result : Succeeded|Player size statistics for|^Total time:)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline);
     private static readonly Regex BuildFailedRegex = new(
-        @"(Build Failed|Build completed with a result of 'Failed'|error CS\d+|FATAL ERROR)",
+        @"(Build Failed|Build completed with a result of 'Failed'|\*\*\* Build did not run successfully|error CS\d+|FATAL ERROR|UnityException:|Exception thrown:|BuildFailedException)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex BuildCancelledRegex = new(
-        @"(\*\*\* Cancelled|Build cancelled)",
+        @"(\*\*\* Cancelled|Build cancelled|user request to abort)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex CompilingRegex = new(
         @"(Compiling scripts|Compiling shader|Reloading assemblies)",

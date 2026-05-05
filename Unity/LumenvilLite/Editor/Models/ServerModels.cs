@@ -51,6 +51,7 @@ namespace LumenvilLite.Models
         public HealthResponse health;
         public UnityResponse unity;
         public BuildStatusResponse build;
+        public ActiveBuildInfo activeBuild;
     }
 
     [Serializable]

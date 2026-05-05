@@ -555,6 +555,40 @@ namespace LumenvilLite
             }
         }
 
+        private void DrawBuildResultBanner(string status)
+        {
+            string label;
+            Color background;
+            switch (status)
+            {
+                case "Success":
+                    label = "✓  Build succeeded";
+                    background = new Color(0.20f, 0.55f, 0.30f, 0.85f);
+                    break;
+                case "Failed":
+                    label = "✕  Build failed";
+                    background = new Color(0.70f, 0.25f, 0.25f, 0.90f);
+                    break;
+                case "Cancelled":
+                    label = "⊘  Build cancelled";
+                    background = new Color(0.70f, 0.55f, 0.20f, 0.85f);
+                    break;
+                default:
+                    return;
+            }
+
+            var rect = GUILayoutUtility.GetRect(0, 28, GUILayout.ExpandWidth(true));
+            EditorGUI.DrawRect(rect, background);
+            var labelStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.white },
+                fontSize = 13
+            };
+            GUI.Label(rect, label, labelStyle);
+            EditorGUILayout.Space(4);
+        }
+
         private bool IsEditorOpenOnProject(string projectPath, out int pid)
         {
             pid = 0;
@@ -589,6 +623,9 @@ namespace LumenvilLite
                 return;
             }
 
+            // Big result banner so success / failure is unmissable.
+            DrawBuildResultBanner(build.status);
+
             EditorGUILayout.BeginHorizontal();
             DrawDot(GetBuildColor(build.status));
             var statusText = string.IsNullOrEmpty(build.currentPhase)
@@ -596,6 +633,25 @@ namespace LumenvilLite
                 : $"{build.status} — {build.currentPhase}";
             GUILayout.Label(statusText);
             EditorGUILayout.EndHorizontal();
+
+            // Active build context — what we asked the server to build, and
+            // where the artefact will land. Shown so the user can find the
+            // output even after a successful build banner clears.
+            var active = _lastStatus?.activeBuild;
+            if (active != null && !string.IsNullOrEmpty(active.outputPath))
+            {
+                EditorGUILayout.LabelField(
+                    $"{active.projectName} • {active.target} • {active.backend}",
+                    _labelMutedStyle);
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField($"Output: {active.outputPath}", _labelMutedStyle);
+                if (GUILayout.Button("Copy", GUILayout.Width(50)))
+                {
+                    EditorGUIUtility.systemCopyBuffer = active.outputPath;
+                    ShowNotification(new GUIContent("Output path copied"));
+                }
+                EditorGUILayout.EndHorizontal();
+            }
 
             if (!string.IsNullOrEmpty(build.lastLogLine))
             {
