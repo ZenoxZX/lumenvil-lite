@@ -8,24 +8,23 @@ public static class BuildEndpoint
     {
         app.MapGet("/build", (UnityLogWatcher watcher, UnityProcessScanner scanner, BuildLauncher launcher) =>
         {
-            string? candidateLogPath = null;
-            if (OperatingSystem.IsWindows())
+            if (!OperatingSystem.IsWindows())
             {
-                var active = launcher.GetActive();
-                if (active != null && !string.IsNullOrEmpty(active.LogFilePath))
-                {
-                    candidateLogPath = active.LogFilePath;
-                }
-                else
-                {
-                    var unity = scanner.Scan();
-                    candidateLogPath = unity.Processes
-                        .Select(p => p.LogFilePath)
-                        .FirstOrDefault(path => !string.IsNullOrEmpty(path));
-                }
+                return Results.Ok(watcher.Inspect(candidateLogPath: null));
             }
 
-            return Results.Ok(watcher.Inspect(candidateLogPath));
+            var snapshot = launcher.GetCanonicalSnapshot();
+            DateTime? finishedAt = snapshot.lastBuild?.FinishedAtUtc;
+            var candidateLogPath = snapshot.logPath;
+            if (string.IsNullOrEmpty(candidateLogPath))
+            {
+                var unity = scanner.Scan();
+                candidateLogPath = unity.Processes
+                    .Select(p => p.LogFilePath)
+                    .FirstOrDefault(path => !string.IsNullOrEmpty(path));
+            }
+
+            return Results.Ok(watcher.Inspect(candidateLogPath, snapshot.status, finishedAt));
         });
     }
 }

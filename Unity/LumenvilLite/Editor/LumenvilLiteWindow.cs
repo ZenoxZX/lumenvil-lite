@@ -137,6 +137,10 @@ namespace LumenvilLite
             {
                 _lastTransitionTime = DateTime.Now;
                 NotifyBuildFinished(current);
+                if (current == "Failed")
+                {
+                    _showLogTail = true; // surface error context automatically
+                }
             }
 
             _previousBuildStatus = current;
@@ -638,6 +642,7 @@ namespace LumenvilLite
             // where the artefact will land. Shown so the user can find the
             // output even after a successful build banner clears.
             var active = _lastStatus?.activeBuild;
+            var last = _lastStatus?.lastBuild;
             if (active != null && !string.IsNullOrEmpty(active.outputPath))
             {
                 EditorGUILayout.LabelField(
@@ -651,6 +656,23 @@ namespace LumenvilLite
                     ShowNotification(new GUIContent("Output path copied"));
                 }
                 EditorGUILayout.EndHorizontal();
+            }
+            else if (last != null && !string.IsNullOrEmpty(last.outputPath))
+            {
+                EditorGUILayout.LabelField(
+                    $"{last.projectName} • {last.target} • {last.backend}",
+                    _labelMutedStyle);
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField($"Output: {last.outputPath}", _labelMutedStyle);
+                if (GUILayout.Button("Copy", GUILayout.Width(50)))
+                {
+                    EditorGUIUtility.systemCopyBuffer = last.outputPath;
+                    ShowNotification(new GUIContent("Output path copied"));
+                }
+                EditorGUILayout.EndHorizontal();
+                EditorGUILayout.LabelField(
+                    $"Exit code: {last.exitCode}    Started: {last.startedAtUtc}    Finished: {last.finishedAtUtc}",
+                    _labelMutedStyle);
             }
 
             if (!string.IsNullOrEmpty(build.lastLogLine))

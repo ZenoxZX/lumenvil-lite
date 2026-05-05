@@ -52,6 +52,7 @@ namespace LumenvilLite.Models
         public UnityResponse unity;
         public BuildStatusResponse build;
         public ActiveBuildInfo activeBuild;
+        public LastBuildInfo lastBuild;
     }
 
     [Serializable]
@@ -103,6 +104,20 @@ namespace LumenvilLite.Models
         public string logFilePath;
         public int pid;
         public string startedAtUtc;
+    }
+
+    [Serializable]
+    public class LastBuildInfo
+    {
+        public string projectName;
+        public string target;
+        public string backend;
+        public string outputPath;
+        public string logFilePath;
+        public string outcome;
+        public int exitCode;
+        public string startedAtUtc;
+        public string finishedAtUtc;
     }
 
     [Serializable]

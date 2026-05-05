@@ -4,4 +4,5 @@ public sealed record StatusResponse(
     HealthResponse Health,
     UnityResponse Unity,
     BuildStatusResponse Build,
-    ActiveBuildInfo? ActiveBuild);
+    ActiveBuildInfo? ActiveBuild,
+    LastBuildInfo? LastBuild);

@@ -21,6 +21,25 @@ public sealed record ActiveBuildInfo(
     int Pid,
     DateTime StartedAtUtc);
 
+public enum LastBuildOutcome
+{
+    Unknown,
+    Success,
+    Failed,
+    Cancelled
+}
+
+public sealed record LastBuildInfo(
+    string ProjectName,
+    string Target,
+    BuildBackend Backend,
+    string OutputPath,
+    string LogFilePath,
+    LastBuildOutcome Outcome,
+    int ExitCode,
+    DateTime StartedAtUtc,
+    DateTime FinishedAtUtc);
+
 public sealed record BuildStartResponse(
     bool Started,
     ActiveBuildInfo? Build,

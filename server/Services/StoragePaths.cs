@@ -22,9 +22,10 @@ public static class StoragePaths
         }
     }
 
-    public static string ProjectsFile => Path.Combine(Root, "projects.json");
-    public static string StateFile    => Path.Combine(Root, "state.json");
-    public static string LogsDir      => Path.Combine(Root, "logs");
+    public static string ProjectsFile  => Path.Combine(Root, "projects.json");
+    public static string StateFile     => Path.Combine(Root, "state.json");
+    public static string LastBuildFile => Path.Combine(Root, "last-build.json");
+    public static string LogsDir       => Path.Combine(Root, "logs");
     public static string BuildsRoot
     {
         get

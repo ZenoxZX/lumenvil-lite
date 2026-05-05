@@ -130,6 +130,17 @@ public sealed class BuildLauncher
                 return new BuildCancelResponse(false, $"Failed to kill build process: {ex.Message}");
             }
 
+            var last = new LastBuildInfo(
+                ProjectName: active.ProjectName,
+                Target: active.Target,
+                Backend: active.Backend,
+                OutputPath: active.OutputPath,
+                LogFilePath: active.LogFilePath,
+                Outcome: LastBuildOutcome.Cancelled,
+                ExitCode: -1,
+                StartedAtUtc: active.StartedAtUtc,
+                FinishedAtUtc: DateTime.UtcNow);
+            WriteLastBuild(last);
             ClearState();
             return new BuildCancelResponse(true, null);
         }
@@ -218,7 +229,100 @@ public sealed class BuildLauncher
             StartedAtUtc: DateTime.UtcNow);
 
         WriteState(info);
+
+        // Hook the process so the moment Unity exits we record the exit code
+        // and convert the active build into a last-build record. Pulling
+        // success / failure straight from the exit code is far more reliable
+        // than scraping log lines.
+        try
+        {
+            process.EnableRaisingEvents = true;
+            var captured = info;
+            process.Exited += (_, _) =>
+            {
+                int exitCode;
+                try { exitCode = process.ExitCode; }
+                catch { exitCode = -1; }
+
+                var outcome = exitCode == 0 ? LastBuildOutcome.Success : LastBuildOutcome.Failed;
+                RecordCompletion(captured, exitCode, outcome);
+                process.Dispose();
+            };
+        }
+        catch
+        {
+            // If we cannot wire the exit handler we fall back to log-based
+            // detection — the active build will simply linger in state.json
+            // until the next /status request notices the pid is gone.
+        }
+
         return new BuildStartResponse(Started: true, Build: info, Error: null, ErrorCode: null);
+    }
+
+    private void RecordCompletion(ActiveBuildInfo active, int exitCode, LastBuildOutcome outcome)
+    {
+        lock (_lock)
+        {
+            // Only act if state.json still references this build; a cancel
+            // request might have already cleared it.
+            var current = ReadState();
+            if (current == null || current.Pid != active.Pid)
+            {
+                return;
+            }
+            var last = new LastBuildInfo(
+                ProjectName: active.ProjectName,
+                Target: active.Target,
+                Backend: active.Backend,
+                OutputPath: active.OutputPath,
+                LogFilePath: active.LogFilePath,
+                Outcome: outcome,
+                ExitCode: exitCode,
+                StartedAtUtc: active.StartedAtUtc,
+                FinishedAtUtc: DateTime.UtcNow);
+            WriteLastBuild(last);
+            ClearState();
+        }
+    }
+
+    public LastBuildInfo? GetLastBuild()
+    {
+        lock (_lock)
+        {
+            return ReadLastBuild();
+        }
+    }
+
+    /// <summary>
+    /// Returns the canonical build status for the UI: Building when there
+    /// is an active spawn, otherwise the last completed run's outcome,
+    /// otherwise Idle. The result is meant to override the regex
+    /// classification done by UnityLogWatcher.
+    /// </summary>
+    public (BuildStatus status, string? logPath, LastBuildInfo? lastBuild, ActiveBuildInfo? active)
+        GetCanonicalSnapshot()
+    {
+        lock (_lock)
+        {
+            var active = ReadStateChecked();
+            if (active != null)
+            {
+                return (BuildStatus.Building, active.LogFilePath, ReadLastBuild(), active);
+            }
+            var last = ReadLastBuild();
+            if (last != null)
+            {
+                var status = last.Outcome switch
+                {
+                    LastBuildOutcome.Success   => BuildStatus.Success,
+                    LastBuildOutcome.Failed    => BuildStatus.Failed,
+                    LastBuildOutcome.Cancelled => BuildStatus.Cancelled,
+                    _                          => BuildStatus.Idle
+                };
+                return (status, last.LogFilePath, last, null);
+            }
+            return (BuildStatus.Idle, null, null, null);
+        }
     }
 
     [SupportedOSPlatform("windows")]
@@ -244,22 +348,44 @@ public sealed class BuildLauncher
             return info;
         }
         // If the recorded process is gone, the build finished or crashed —
-        // either way we no longer have an active build to report.
+        // either way we no longer have an active build to report. Promote
+        // it to a Failed last-build record so the UI does not silently
+        // forget about the run.
         try
         {
             using var process = Process.GetProcessById(info.Pid);
             if (process.HasExited)
             {
-                ClearState();
+                int exitCode;
+                try { exitCode = process.ExitCode; }
+                catch { exitCode = -1; }
+                var outcome = exitCode == 0 ? LastBuildOutcome.Success : LastBuildOutcome.Failed;
+                FinaliseFromPolling(info, exitCode, outcome);
                 return null;
             }
             return info;
         }
         catch (ArgumentException)
         {
-            ClearState();
+            FinaliseFromPolling(info, -1, LastBuildOutcome.Failed);
             return null;
         }
+    }
+
+    private void FinaliseFromPolling(ActiveBuildInfo active, int exitCode, LastBuildOutcome outcome)
+    {
+        var last = new LastBuildInfo(
+            ProjectName: active.ProjectName,
+            Target: active.Target,
+            Backend: active.Backend,
+            OutputPath: active.OutputPath,
+            LogFilePath: active.LogFilePath,
+            Outcome: outcome,
+            ExitCode: exitCode,
+            StartedAtUtc: active.StartedAtUtc,
+            FinishedAtUtc: DateTime.UtcNow);
+        WriteLastBuild(last);
+        ClearState();
     }
 
     private static ActiveBuildInfo? ReadState()
@@ -298,6 +424,35 @@ public sealed class BuildLauncher
         {
             try { File.Delete(path); } catch { /* swallow */ }
         }
+    }
+
+    private static LastBuildInfo? ReadLastBuild()
+    {
+        var path = StoragePaths.LastBuildFile;
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+        try
+        {
+            var json = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+            return JsonSerializer.Deserialize<LastBuildInfo>(json, JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void WriteLastBuild(LastBuildInfo info)
+    {
+        StoragePaths.EnsureRoot();
+        var json = JsonSerializer.Serialize(info, JsonOptions);
+        File.WriteAllText(StoragePaths.LastBuildFile, json);
     }
 
     [SupportedOSPlatform("windows")]

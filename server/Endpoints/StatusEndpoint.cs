@@ -24,19 +24,19 @@ public static class StatusEndpoint
             UnityResponse unity;
             string? candidateLogPath = null;
             ActiveBuildInfo? active = null;
+            LastBuildInfo? lastBuild = null;
+            BuildStatus? statusOverride = null;
+            DateTime? finishedAtOverride = null;
             if (OperatingSystem.IsWindows())
             {
                 unity = scanner.Scan();
-                // Prefer the active build's log so a fresh batch build is
-                // surfaced even before its Unity.exe shows up in the scan,
-                // and so the right log gets tailed when both an interactive
-                // editor and a batch build are open at once.
-                active = launcher.GetActive();
-                if (active != null && !string.IsNullOrEmpty(active.LogFilePath))
-                {
-                    candidateLogPath = active.LogFilePath;
-                }
-                else
+                var snapshot = launcher.GetCanonicalSnapshot();
+                active = snapshot.active;
+                lastBuild = snapshot.lastBuild;
+                statusOverride = snapshot.status;
+                finishedAtOverride = lastBuild?.FinishedAtUtc;
+                candidateLogPath = snapshot.logPath;
+                if (string.IsNullOrEmpty(candidateLogPath))
                 {
                     candidateLogPath = unity.Processes
                         .Select(p => p.LogFilePath)
@@ -48,9 +48,9 @@ public static class StatusEndpoint
                 unity = new UnityResponse(false, 0, Array.Empty<UnityProcessInfo>());
             }
 
-            var build = watcher.Inspect(candidateLogPath);
+            var build = watcher.Inspect(candidateLogPath, statusOverride, finishedAtOverride);
 
-            return Results.Ok(new StatusResponse(health, unity, build, active));
+            return Results.Ok(new StatusResponse(health, unity, build, active, lastBuild));
         });
     }
 }

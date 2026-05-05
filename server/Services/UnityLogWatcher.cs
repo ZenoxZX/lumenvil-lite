@@ -24,18 +24,18 @@ public sealed class UnityLogWatcher
         @"(Compiling scripts|Compiling shader|Reloading assemblies)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    public BuildStatusResponse Inspect(string? candidateLogPath)
+    public BuildStatusResponse Inspect(string? candidateLogPath, BuildStatus? statusOverride = null, DateTime? finishedAtOverride = null)
     {
         var path = ResolveLogPath(candidateLogPath);
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
         {
             return new BuildStatusResponse(
-                Status: BuildStatus.Idle,
+                Status: statusOverride ?? BuildStatus.Idle,
                 CurrentPhase: null,
                 LastLogLine: null,
                 LogTail: Array.Empty<string>(),
                 StartedAtUtc: null,
-                FinishedAtUtc: null,
+                FinishedAtUtc: finishedAtOverride,
                 ErrorSummary: null,
                 LogFilePath: path);
         }
@@ -47,13 +47,14 @@ public sealed class UnityLogWatcher
         var lines = ReadTail(path, TailLineCount);
         var lastLine = lines.LastOrDefault(l => !string.IsNullOrWhiteSpace(l));
 
-        var status = ClassifyStatus(lines, staleness);
+        var status = statusOverride ?? ClassifyStatus(lines, staleness);
         var phase = DetectPhase(lines);
         var error = status == BuildStatus.Failed ? FindErrorSummary(lines) : null;
 
-        DateTime? finishedAt = status is BuildStatus.Success or BuildStatus.Failed or BuildStatus.Cancelled
-            ? lastWriteUtc
-            : null;
+        DateTime? finishedAt = finishedAtOverride
+            ?? (status is BuildStatus.Success or BuildStatus.Failed or BuildStatus.Cancelled
+                ? lastWriteUtc
+                : null);
 
         return new BuildStatusResponse(
             Status: status,
