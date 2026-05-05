@@ -128,7 +128,10 @@ namespace LumenvilLite.UI
                         {
                             EditorGUILayout.LabelField(project.name, EditorStyles.boldLabel);
                             EditorGUILayout.LabelField(project.projectPath, EditorStyles.miniLabel);
-                            EditorGUILayout.LabelField($"executeMethod: {project.executeMethod}", EditorStyles.miniLabel);
+                            var methodLabel = string.IsNullOrEmpty(project.executeMethod)
+                                ? "executeMethod: (built-in builder)"
+                                : $"executeMethod: {project.executeMethod}";
+                            EditorGUILayout.LabelField(methodLabel, EditorStyles.miniLabel);
                         }
                         if (GUILayout.Button("Remove", GUILayout.Width(80), GUILayout.Height(36)))
                         {
@@ -161,8 +164,13 @@ namespace LumenvilLite.UI
                 }
 
                 _newExecuteMethod = EditorGUILayout.TextField(
-                    new GUIContent("Execute method", "Fully qualified static method to run, e.g. BuildScript.BuildFromLumenvil"),
+                    new GUIContent("Execute method (optional)",
+                        "Fully qualified static method, e.g. BuildScript.BuildFromLumenvil. " +
+                        "Leave empty to use the built-in LumenvilLite.Editor.Build.LumenvilLiteBuilder.Build."),
                     _newExecuteMethod);
+                EditorGUILayout.LabelField(
+                    "Leave empty to use the built-in builder.",
+                    EditorStyles.miniLabel);
 
                 if (!string.IsNullOrEmpty(_addError))
                 {
@@ -186,10 +194,9 @@ namespace LumenvilLite.UI
         private async UniTaskVoid AddAsync()
         {
             if (string.IsNullOrWhiteSpace(_newName) ||
-                string.IsNullOrWhiteSpace(_newProjectPath) ||
-                string.IsNullOrWhiteSpace(_newExecuteMethod))
+                string.IsNullOrWhiteSpace(_newProjectPath))
             {
-                _addError = "Name, project path and execute method are required.";
+                _addError = "Name and project path are required.";
                 Repaint();
                 return;
             }

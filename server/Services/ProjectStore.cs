@@ -42,10 +42,8 @@ public sealed class ProjectStore
         {
             throw new ArgumentException("Project path is required.");
         }
-        if (string.IsNullOrWhiteSpace(entry.ExecuteMethod))
-        {
-            throw new ArgumentException("Execute method is required.");
-        }
+        // ExecuteMethod is optional — when omitted, the server falls back to
+        // the built-in LumenvilLiteBuilder shipped with the Unity package.
 
         lock (_lock)
         {

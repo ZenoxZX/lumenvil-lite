@@ -146,6 +146,7 @@ curl http://<windows-host>:5151/status
 ## Build script contract
 
 `POST /build/start` invokes Unity in batch mode and runs your registered `executeMethod`.
+**You can also leave `executeMethod` empty** when registering a project — the server then falls back to `LumenvilLite.Editor.Build.LumenvilLiteBuilder.Build`, the default builder shipped with the Unity package. It reads the same arguments documented below, builds the scenes that are enabled in **Build Settings**, and exits non-zero on failure. The same file (`Unity/LumenvilLite/Editor/Build/LumenvilLiteBuilder.cs`) is also the recommended starting point if you want to write your own — copy it into your project, rename the method, and tweak.
 Lumenvil Lite passes these custom CLI arguments alongside Unity's own:
 
 | Argument             | Value                                                              |

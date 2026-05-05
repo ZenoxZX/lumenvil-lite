@@ -464,12 +464,15 @@ namespace LumenvilLite
             }
 
             var defines = string.IsNullOrWhiteSpace(_buildDefines) ? null : _buildDefines.Trim();
+            var methodLabel = string.IsNullOrWhiteSpace(project.executeMethod)
+                ? "Method:  (built-in LumenvilLiteBuilder.Build)"
+                : $"Method:  {project.executeMethod}";
             var prompt =
                 $"Start build for '{project.name}'?\n\n" +
                 $"Target:  {target}\n" +
                 $"Backend: {backend}\n" +
                 (string.IsNullOrEmpty(defines) ? string.Empty : $"Defines: {defines}\n") +
-                $"Method:  {project.executeMethod}";
+                methodLabel;
 
             if (!EditorUtility.DisplayDialog("Start build", prompt, "Start", "Cancel"))
             {

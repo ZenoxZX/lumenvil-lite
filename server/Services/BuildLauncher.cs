@@ -17,6 +17,7 @@ public sealed class BuildLauncher
     };
 
     private static readonly string[] AllowedTargets = { "StandaloneWindows64" };
+    public const string DefaultExecuteMethod = "LumenvilLite.Editor.Build.LumenvilLiteBuilder.Build";
 
     private readonly UnityProcessScanner _scanner;
     private readonly object _lock = new();
@@ -168,6 +169,10 @@ public sealed class BuildLauncher
 
         var logFile = Path.Combine(StoragePaths.LogsDir, $"{project.Name}-{request.Target}-{timestamp}.log");
 
+        var executeMethod = string.IsNullOrWhiteSpace(project.ExecuteMethod)
+            ? DefaultExecuteMethod
+            : project.ExecuteMethod.Trim();
+
         var args = new List<string>
         {
             "-batchmode",
@@ -175,7 +180,7 @@ public sealed class BuildLauncher
             "-nographics",
             "-projectPath", QuotePath(project.ProjectPath),
             "-buildTarget", request.Target,
-            "-executeMethod", project.ExecuteMethod,
+            "-executeMethod", executeMethod,
             "-logFile", QuotePath(logFile),
             "-lumenvilTarget", request.Target,
             "-lumenvilBackend", request.Backend.ToString(),
