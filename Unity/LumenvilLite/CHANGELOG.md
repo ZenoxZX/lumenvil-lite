@@ -14,3 +14,4 @@ and this package adheres to [Semantic Versioning](https://semver.org/).
 - Build status panel with current phase, last log line, and a foldout log tail.
 - `EditorApplication.Beep` + in-window notification when a build leaves the "Building" state.
 - Settings persisted via `EditorPrefs` (host, port, poll interval, timeout).
+- Per-process **Quit** and **Force** buttons that ask the server to kill the remote Unity process. Quit goes through `CloseMainWindow` first (and falls back to a hard kill after a 5s timeout), Force calls `Process.Kill` immediately. Both prompt for confirmation in the editor before sending.

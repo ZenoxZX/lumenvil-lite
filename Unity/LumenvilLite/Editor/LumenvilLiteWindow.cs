@@ -27,6 +27,7 @@ namespace LumenvilLite
         private StatusResponse _lastStatus;
         private string _previousBuildStatus;
         private DateTime _lastTransitionTime;
+        private int _killInFlightPid = -1;
 
         private Vector2 _scrollPosition;
 
@@ -251,12 +252,75 @@ namespace LumenvilLite
                     var project = string.IsNullOrEmpty(process.projectPath)
                         ? "(unknown project)"
                         : System.IO.Path.GetFileName(process.projectPath.TrimEnd('/', '\\'));
-                    EditorGUILayout.LabelField(
+
+                    EditorGUILayout.BeginHorizontal();
+                    GUILayout.Label(
                         $"  • {typeLabel} — {project}    RAM {ramGb:0.0}GB    {FormatUptime(uptime)}");
+                    GUILayout.FlexibleSpace();
+
+                    using (new EditorGUI.DisabledScope(_killInFlightPid == process.pid))
+                    {
+                        if (GUILayout.Button("Quit", GUILayout.Width(54)))
+                        {
+                            ConfirmAndKillAsync(process, typeLabel, project, force: false).Forget();
+                        }
+                        if (GUILayout.Button("Force", GUILayout.Width(54)))
+                        {
+                            ConfirmAndKillAsync(process, typeLabel, project, force: true).Forget();
+                        }
+                    }
+
+                    EditorGUILayout.EndHorizontal();
                 }
             }
 
             EditorGUILayout.EndVertical();
+        }
+
+        private async UniTaskVoid ConfirmAndKillAsync(
+            UnityProcessInfo process, string typeLabel, string project, bool force)
+        {
+            var title = force ? "Force kill Unity process?" : "Quit Unity process?";
+            var body = force
+                ? $"Force-kill {typeLabel} on '{project}' (pid {process.pid})?\n\n" +
+                  "Force skips the save prompt and terminates immediately. " +
+                  "Any unsaved scenes/assets will be lost."
+                : $"Quit {typeLabel} on '{project}' (pid {process.pid})?\n\n" +
+                  "Unity will get its normal close-window signal. If a save " +
+                  "prompt appears on the build machine the request will time " +
+                  "out after 5s and the server will fall back to a hard kill.";
+            var confirm = force ? "Force Kill" : "Quit";
+
+            if (!EditorUtility.DisplayDialog(title, body, confirm, "Cancel"))
+            {
+                return;
+            }
+
+            _killInFlightPid = process.pid;
+            Repaint();
+            try
+            {
+                var response = await _client.KillUnityProcessAsync(process.pid, force, _pollCts.Token);
+                var ok = response != null && response.killed;
+                var label = ok
+                    ? $"Killed pid {process.pid} ({response.method})"
+                    : $"Kill failed: {response?.error ?? "unknown error"}";
+                ShowNotification(new GUIContent(label));
+                _lastPollTime = 0; // Refresh the panel immediately.
+            }
+            catch (OperationCanceledException)
+            {
+                // Window closed mid-flight, swallow.
+            }
+            catch (LumenvilLiteRequestException ex)
+            {
+                ShowNotification(new GUIContent($"Kill failed: {ShortenError(ex.Message)}"));
+            }
+            finally
+            {
+                _killInFlightPid = -1;
+                Repaint();
+            }
         }
 
         private void DrawBuildPanel()

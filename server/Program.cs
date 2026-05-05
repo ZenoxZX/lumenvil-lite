@@ -24,6 +24,7 @@ app.MapHealthEndpoint();
 app.MapUnityEndpoint();
 app.MapBuildEndpoint();
 app.MapStatusEndpoint();
+app.MapKillEndpoint();
 
 app.Logger.LogInformation("Lumenvil Lite listening on http://0.0.0.0:5151");
 app.Run();

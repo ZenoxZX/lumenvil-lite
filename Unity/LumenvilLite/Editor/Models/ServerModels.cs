@@ -52,5 +52,21 @@ namespace LumenvilLite.Models
         public UnityResponse unity;
         public BuildStatusResponse build;
     }
+
+    [Serializable]
+    public class KillRequest
+    {
+        public bool force;
+    }
+
+    [Serializable]
+    public class KillResponse
+    {
+        public int pid;
+        public bool killed;
+        public string method;
+        public int exitCode;
+        public string error;
+    }
 }
 #endif
