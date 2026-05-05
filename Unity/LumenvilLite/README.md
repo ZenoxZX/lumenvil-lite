@@ -14,14 +14,21 @@ This is the Unity-side half of the project. The companion .NET 8 server lives at
 
 ## Installation (Package Manager — Git URL)
 
+This package depends on [UniTask](https://github.com/Cysharp/UniTask). Unity's
+Package Manager does not resolve Git URLs declared inside a package's
+`dependencies`, so UniTask has to be added to the project first.
+
 1. Open **Window → Package Manager**.
-2. Click **+** → **Add package from git URL...**
-3. Enter:
+2. Click **+** → **Add package from git URL...** and add UniTask:
+   ```
+   https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask
+   ```
+3. Click **+** → **Add package from git URL...** again and add Lumenvil Lite:
    ```
    https://github.com/ZenoxZX/lumenvil-lite.git?path=Unity/LumenvilLite
    ```
 
-The package declares [UniTask](https://github.com/Cysharp/UniTask) as a Git dependency; Unity will fetch it automatically.
+If UniTask is missing the package will fail to compile — install it first.
 
 ## Usage
 

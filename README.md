@@ -96,15 +96,19 @@ This is mostly useful while iterating on the server itself.
 
 ### Unity (any OS)
 
-The Unity side ships as a UPM package under `Unity/LumenvilLite/`.
+The Unity side ships as a UPM package under `Unity/LumenvilLite/`. UniTask
+must be installed first because Unity's Package Manager does not resolve
+Git-URL dependencies declared inside a package.
 
 1. In Unity, open **Window → Package Manager**.
-2. Click **+** → **Add package from git URL...**
-3. Enter:
+2. Click **+** → **Add package from git URL...** and add UniTask:
+   ```
+   https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask
+   ```
+3. Click **+** → **Add package from git URL...** again and add Lumenvil Lite:
    ```
    https://github.com/ZenoxZX/lumenvil-lite.git?path=Unity/LumenvilLite
    ```
-   UniTask is declared as a package dependency and pulled in automatically.
 4. In **Player Settings**, set **Allow downloads over HTTP** to **Always allowed** (the server speaks plain HTTP on the LAN).
 5. Open **Tools → Lumenvil Lite**.
 6. Click **Settings**, set:
