@@ -40,8 +40,10 @@ namespace LumenvilLite.UI
         {
             _client = new LumenvilLiteClient();
             _cts = new CancellationTokenSource();
-            ReloadAsync().Forget();
+            ReloadFireAndForget();
         }
+
+        private void ReloadFireAndForget() => ReloadAsync().Forget();
 
         private void OnDisable()
         {
@@ -50,7 +52,7 @@ namespace LumenvilLite.UI
             _cts = null;
         }
 
-        private async UniTaskVoid ReloadAsync()
+        private async UniTask ReloadAsync()
         {
             _loading = true;
             _loadError = null;
