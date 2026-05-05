@@ -9,6 +9,20 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
+  <!--
+    Single-file, self-contained publish defaults so the produced binary
+    runs on a Windows machine that does not have the .NET 8 runtime.
+    Override RuntimeIdentifier on the command line when targeting other
+    architectures (e.g. -r win-arm64).
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>

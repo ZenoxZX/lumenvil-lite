@@ -34,7 +34,9 @@ lumenvil-lite/
 │   ├── Program.cs
 │   ├── Endpoints/
 │   ├── Services/
-│   └── Models/
+│   ├── Models/
+│   └── scripts/
+│       └── install-task.ps1      # Publish + register-on-logon installer
 └── Unity/
     └── LumenvilLite/             # Unity side (UPM package)
         ├── package.json
@@ -53,21 +55,44 @@ lumenvil-lite/
 
 ### Windows (build machine)
 
-1. Install [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
-2. Copy `server/` somewhere on the Windows host (e.g. `C:\Tools\LumenvilLite\`).
-3. Run it:
+The recommended path publishes a single self-contained `.exe` and registers
+it as a scheduled task that starts on user logon. Once installed, the
+machine just has to be powered on and logged in — no terminal stays open,
+no `dotnet run` needed.
+
+1. Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) on the Windows host.
+2. Clone or copy this repository to the host.
+3. Open **PowerShell as Administrator**, then from the repo root:
    ```powershell
-   cd C:\Tools\LumenvilLite
-   dotnet run
+   cd server\scripts
+   .\install-task.ps1
    ```
-   Expected output:
-   ```
-   Lumenvil Lite listening on http://0.0.0.0:5151
-   ```
-4. Open the firewall port (one-time):
+   The script:
+   - publishes a single-file self-contained binary into `C:\Tools\LumenvilLite\`,
+   - opens TCP 5151 in the firewall,
+   - registers a scheduled task named **Lumenvil Lite** that runs on logon,
+   - starts the task immediately so you don't have to log out and back in.
+
+   Verify with:
    ```powershell
-   New-NetFirewallRule -DisplayName "Lumenvil Lite" -Direction Inbound -Protocol TCP -LocalPort 5151 -Action Allow
+   curl http://localhost:5151/health
    ```
+
+4. To remove everything later:
+   ```powershell
+   .\install-task.ps1 -Uninstall
+   ```
+
+#### Manual / dev mode
+
+If you'd rather run it ad-hoc without installing a task:
+
+```powershell
+cd server
+dotnet run
+```
+
+This is mostly useful while iterating on the server itself.
 
 ### Unity (any OS)
 
