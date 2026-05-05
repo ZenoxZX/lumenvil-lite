@@ -16,6 +16,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.AddSingleton<UnityProcessScanner>();
 builder.Services.AddSingleton<UnityLogWatcher>();
+builder.Services.AddSingleton<ProjectStore>();
 builder.Services.AddSingleton(_ => new ServerInfo(DateTime.UtcNow));
 
 var app = builder.Build();
@@ -25,6 +26,7 @@ app.MapUnityEndpoint();
 app.MapBuildEndpoint();
 app.MapStatusEndpoint();
 app.MapKillEndpoint();
+app.MapProjectsEndpoint();
 
 app.Logger.LogInformation("Lumenvil Lite listening on http://0.0.0.0:5151");
 app.Run();
