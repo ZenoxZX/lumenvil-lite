@@ -36,7 +36,7 @@ namespace LumenvilLite.UI
         public static void Open(ProjectEntry entry, Action onSaved)
         {
             var window = GetWindow<ProjectStepsWindow>(utility: true, title: "Lumenvil Lite — Pre-build Steps");
-            window.minSize = new Vector2(620, 360);
+            window.minSize = new Vector2(620, 480);
             window._projectName = entry.name;
             window._projectPath = entry.projectPath;
             window._executeMethod = entry.executeMethod;
@@ -66,8 +66,10 @@ namespace LumenvilLite.UI
             EditorGUILayout.LabelField("Steps run in order against the project path before each build.", EditorStyles.miniLabel);
             EditorGUILayout.Space(4);
 
+            // Scrollable step list expands to fill the window.
             DrawList();
 
+            // Action footer always pinned to the bottom.
             EditorGUILayout.Space(4);
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -75,17 +77,6 @@ namespace LumenvilLite.UI
                 {
                     _steps.Add(new GitStep { kind = "preset", preset = "Fetch", args = string.Empty });
                 }
-                GUILayout.FlexibleSpace();
-            }
-
-            if (!string.IsNullOrEmpty(_error))
-            {
-                EditorGUILayout.HelpBox(_error, MessageType.Error);
-            }
-
-            EditorGUILayout.Space(8);
-            using (new EditorGUILayout.HorizontalScope())
-            {
                 GUILayout.FlexibleSpace();
                 if (GUILayout.Button("Cancel", GUILayout.Width(100)))
                 {
@@ -99,80 +90,85 @@ namespace LumenvilLite.UI
                     }
                 }
             }
+
+            if (!string.IsNullOrEmpty(_error))
+            {
+                EditorGUILayout.HelpBox(_error, MessageType.Error);
+            }
         }
 
         private void DrawList()
         {
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            if (_steps.Count == 0)
             {
-                if (_steps.Count == 0)
-                {
-                    EditorGUILayout.LabelField("No steps yet — click '+ Add step' to add one.", EditorStyles.miniLabel);
-                    return;
-                }
-
-                _scroll = EditorGUILayout.BeginScrollView(_scroll, GUILayout.MinHeight(180));
-                for (int i = 0; i < _steps.Count; i++)
-                {
-                    DrawStep(i);
-                }
-                EditorGUILayout.EndScrollView();
+                EditorGUILayout.LabelField("No steps yet — click '+ Add step' to add one.",
+                    EditorStyles.miniLabel);
+                return;
             }
+
+            // Scroll view fills the remaining vertical space so the action
+            // row at the bottom stays visible no matter how many steps exist.
+            _scroll = EditorGUILayout.BeginScrollView(_scroll,
+                GUILayout.ExpandHeight(true));
+            for (int i = 0; i < _steps.Count; i++)
+            {
+                DrawStep(i);
+            }
+            EditorGUILayout.EndScrollView();
         }
 
         private void DrawStep(int i)
         {
             var step = _steps[i];
-            using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                using (new EditorGUILayout.VerticalScope())
+                // Header row: index + reorder/remove buttons together.
+                using (new EditorGUILayout.HorizontalScope())
                 {
                     EditorGUILayout.LabelField($"Step {i + 1}", EditorStyles.boldLabel, GUILayout.Width(60));
-
-                    var kindIndex = string.Equals(step.kind, "custom", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
-                    var newKindIndex = EditorGUILayout.Popup("Kind", kindIndex, KindOptions);
-                    if (newKindIndex != kindIndex)
-                    {
-                        step.kind = newKindIndex == 1 ? "custom" : "preset";
-                    }
-
-                    if (step.kind == "custom")
-                    {
-                        step.customCommand = EditorGUILayout.TextField(
-                            new GUIContent("Command", "Whatever follows 'git ' — e.g. 'stash pop', 'submodule update --init'"),
-                            step.customCommand ?? string.Empty);
-                    }
-                    else
-                    {
-                        var presetIndex = Mathf.Max(0, Array.FindIndex(PresetOptions,
-                            p => string.Equals(p, step.preset, StringComparison.OrdinalIgnoreCase)));
-                        var newPresetIndex = EditorGUILayout.Popup("Preset", presetIndex, PresetOptions);
-                        step.preset = PresetOptions[newPresetIndex];
-
-                        step.args = EditorGUILayout.TextField(
-                            new GUIContent("Args", PresetTooltip(step.preset)),
-                            step.args ?? string.Empty);
-                    }
-
-                    EditorGUILayout.LabelField($"Preview: git {Preview(step)}", EditorStyles.miniLabel);
-                }
-
-                using (new EditorGUILayout.VerticalScope(GUILayout.Width(40)))
-                {
+                    GUILayout.FlexibleSpace();
                     using (new EditorGUI.DisabledScope(i == 0))
                     {
-                        if (GUILayout.Button("↑")) { Swap(i, i - 1); }
+                        if (GUILayout.Button("↑", GUILayout.Width(28))) Swap(i, i - 1);
                     }
                     using (new EditorGUI.DisabledScope(i == _steps.Count - 1))
                     {
-                        if (GUILayout.Button("↓")) { Swap(i, i + 1); }
+                        if (GUILayout.Button("↓", GUILayout.Width(28))) Swap(i, i + 1);
                     }
-                    if (GUILayout.Button("✕"))
+                    if (GUILayout.Button("✕", GUILayout.Width(28)))
                     {
                         _steps.RemoveAt(i);
                         GUIUtility.ExitGUI();
                     }
                 }
+
+                // Body fields.
+                var kindIndex = string.Equals(step.kind, "custom", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+                var newKindIndex = EditorGUILayout.Popup("Kind", kindIndex, KindOptions);
+                if (newKindIndex != kindIndex)
+                {
+                    step.kind = newKindIndex == 1 ? "custom" : "preset";
+                }
+
+                if (step.kind == "custom")
+                {
+                    step.customCommand = EditorGUILayout.TextField(
+                        new GUIContent("Command", "Whatever follows 'git ' — e.g. 'stash pop', 'submodule update --init'"),
+                        step.customCommand ?? string.Empty);
+                }
+                else
+                {
+                    var presetIndex = Mathf.Max(0, Array.FindIndex(PresetOptions,
+                        p => string.Equals(p, step.preset, StringComparison.OrdinalIgnoreCase)));
+                    var newPresetIndex = EditorGUILayout.Popup("Preset", presetIndex, PresetOptions);
+                    step.preset = PresetOptions[newPresetIndex];
+
+                    step.args = EditorGUILayout.TextField(
+                        new GUIContent("Args", PresetTooltip(step.preset)),
+                        step.args ?? string.Empty);
+                }
+
+                EditorGUILayout.LabelField($"git {Preview(step)}", EditorStyles.miniLabel);
             }
         }
 
