@@ -17,6 +17,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddSingleton<UnityProcessScanner>();
 builder.Services.AddSingleton<UnityLogWatcher>();
 builder.Services.AddSingleton<ProjectStore>();
+builder.Services.AddSingleton<GitRunner>();
 builder.Services.AddSingleton<BuildLauncher>();
 builder.Services.AddSingleton(_ => new ServerInfo(DateTime.UtcNow));
 

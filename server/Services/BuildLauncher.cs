@@ -23,11 +23,13 @@ public sealed class BuildLauncher
     public const string DefaultExecuteMethod = "LumenvilLiteBuilder.Build";
 
     private readonly UnityProcessScanner _scanner;
+    private readonly GitRunner _gitRunner;
     private readonly object _lock = new();
 
-    public BuildLauncher(UnityProcessScanner scanner)
+    public BuildLauncher(UnityProcessScanner scanner, GitRunner gitRunner)
     {
         _scanner = scanner;
+        _gitRunner = gitRunner;
     }
 
     public ActiveBuildInfo? GetActive()
@@ -100,7 +102,29 @@ public sealed class BuildLauncher
                     ErrorCode: "editor_open");
             }
 
-            return LaunchUnchecked(request, project);
+            IReadOnlyList<PreBuildStepResult> preBuildResults = Array.Empty<PreBuildStepResult>();
+            if (request.RunPreBuildSteps && project.PreBuildSteps.Count > 0)
+            {
+                preBuildResults = _gitRunner.Run(project.PreBuildSteps, project.ProjectPath);
+                var failure = preBuildResults.FirstOrDefault(r => r.ExitCode != 0);
+                if (failure != null)
+                {
+                    var stderr = string.IsNullOrWhiteSpace(failure.Stderr)
+                        ? "(no stderr)"
+                        : failure.Stderr.Trim();
+                    return new BuildStartResponse(
+                        Started: false,
+                        Build: null,
+                        Error: $"Pre-build step #{failure.StepIndex + 1} ({failure.Command}) failed with exit code {failure.ExitCode}: {stderr}",
+                        ErrorCode: "prebuild_failed")
+                    {
+                        PreBuildResults = preBuildResults
+                    };
+                }
+            }
+
+            var response = LaunchUnchecked(request, project);
+            return response with { PreBuildResults = preBuildResults };
         }
     }
 

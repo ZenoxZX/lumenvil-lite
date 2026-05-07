@@ -72,11 +72,31 @@ namespace LumenvilLite.Models
     }
 
     [Serializable]
+    public class GitStep
+    {
+        public string kind = "preset";
+        public string preset;
+        public string args;
+        public string customCommand;
+    }
+
+    [Serializable]
+    public class PreBuildStepResult
+    {
+        public int stepIndex;
+        public string command;
+        public int exitCode;
+        public string stdout;
+        public string stderr;
+    }
+
+    [Serializable]
     public class ProjectEntry
     {
         public string name;
         public string projectPath;
         public string executeMethod;
+        public GitStep[] preBuildSteps;
     }
 
     [Serializable]
@@ -92,6 +112,7 @@ namespace LumenvilLite.Models
         public string target;
         public string backend;   // "Il2cpp" or "Mono"
         public string defines;
+        public bool runPreBuildSteps;
     }
 
     [Serializable]
@@ -127,6 +148,7 @@ namespace LumenvilLite.Models
         public ActiveBuildInfo build;
         public string error;
         public string errorCode;
+        public PreBuildStepResult[] preBuildResults;
     }
 
     [Serializable]

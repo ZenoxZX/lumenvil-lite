@@ -10,7 +10,15 @@ public sealed record BuildStartRequest(
     string ProjectName,
     string Target,
     BuildBackend Backend,
-    string? Defines);
+    string? Defines)
+{
+    /// <summary>
+    /// When true, the project's PreBuildSteps run before Unity is spawned.
+    /// When false (or omitted), the pre-build steps are skipped — useful
+    /// for "I just want to test the build, don't touch git" runs.
+    /// </summary>
+    public bool RunPreBuildSteps { get; init; } = false;
+}
 
 public sealed record ActiveBuildInfo(
     string ProjectName,
@@ -44,7 +52,16 @@ public sealed record BuildStartResponse(
     bool Started,
     ActiveBuildInfo? Build,
     string? Error,
-    string? ErrorCode);
+    string? ErrorCode)
+{
+    /// <summary>
+    /// Results of the pre-build git steps if any ran, in order.
+    /// On <c>prebuild_failed</c> the last entry holds the failing
+    /// step's stderr; on success this is the full successful chain
+    /// for traceability.
+    /// </summary>
+    public IReadOnlyList<PreBuildStepResult> PreBuildResults { get; init; } = Array.Empty<PreBuildStepResult>();
+}
 
 public sealed record ActiveBuildResponse(ActiveBuildInfo? Active);
 

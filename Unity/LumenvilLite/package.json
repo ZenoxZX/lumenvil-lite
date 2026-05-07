@@ -1,6 +1,6 @@
 {
   "name": "com.zenoxzx.lumenvil-lite",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "displayName": "Lumenvil Lite",
   "description": "Editor window that polls a remote Windows build machine over the LAN. Shows reachability, running Unity processes (Editor vs. batch build), live build status, lets you quit/force-kill Unity remotely, and triggers batch-mode builds against registered projects. Pairs with the Lumenvil Lite HTTP server in the same repository.",
   "unity": "2021.3",

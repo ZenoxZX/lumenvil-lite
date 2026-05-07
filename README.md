@@ -143,6 +143,12 @@ curl http://<windows-host>:5151/status
 | GET    | `/build/active`       | Active build info or null                                            |
 | POST   | `/build/cancel`       | Kill the active build                                                |
 
+## Pre-build git steps
+
+Each registered project can carry an ordered list of git steps (Fetch, Pull, Checkout, Restore, Reset, Status, Clean, or a free-form Custom command). When the **Use git pre-build steps** toggle is on, the server runs them in order against the project path before spawning Unity. The first non-zero exit cancels the chain and the build never starts.
+
+Manage the list from the editor window via **Edit Steps...** next to the toggle. Steps live in `projects.json` on the server, so every client that talks to the same server sees the same list. The build response includes a `preBuildResults` array with each step's stdout / stderr / exit code so failures are easy to investigate (the editor dialog has a **Copy Log** button that puts the whole chain on the clipboard).
+
 ## Build script contract
 
 `POST /build/start` invokes Unity in batch mode and runs your registered `executeMethod`.

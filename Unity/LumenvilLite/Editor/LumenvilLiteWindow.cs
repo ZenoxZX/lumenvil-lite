@@ -38,6 +38,7 @@ namespace LumenvilLite
         private int _selectedTargetIndex;
         private int _selectedBackendIndex;
         private string _buildDefines = string.Empty;
+        private bool _useGitSteps;
         private bool _buildStartInFlight;
         private bool _buildCancelInFlight;
         private string _buildTriggerMessage;
@@ -388,6 +389,30 @@ namespace LumenvilLite
                 new GUIContent("Defines", "Optional, semicolon-separated. Leave empty to skip."),
                 _buildDefines);
 
+            // Pre-build git steps toggle. Steps live on the project entry
+            // server-side, so 'Edit Steps...' opens a popup that PUTs the
+            // updated entry back to /projects/{name}.
+            var currentProject = _projects.Length > 0
+                ? _projects[Mathf.Clamp(_selectedProjectIndex, 0, _projects.Length - 1)]
+                : null;
+            var stepCount = currentProject?.preBuildSteps?.Length ?? 0;
+
+            EditorGUILayout.BeginHorizontal();
+            _useGitSteps = EditorGUILayout.ToggleLeft(
+                new GUIContent(
+                    $"Use git pre-build steps ({stepCount})",
+                    "When on, the server runs the project's git steps (in order, against its projectPath) before launching the build. Any non-zero exit cancels the build."),
+                _useGitSteps);
+            GUILayout.FlexibleSpace();
+            using (new EditorGUI.DisabledScope(currentProject == null))
+            {
+                if (GUILayout.Button("Edit Steps...", GUILayout.Width(120)))
+                {
+                    UI.ProjectStepsWindow.Open(currentProject, () => RefreshProjectsAsync(force: true).Forget());
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+
             if (!string.IsNullOrEmpty(_buildTriggerMessage))
             {
                 EditorGUILayout.HelpBox(_buildTriggerMessage, MessageType.Info);
@@ -468,8 +493,27 @@ namespace LumenvilLite
             var methodLabel = string.IsNullOrWhiteSpace(project.executeMethod)
                 ? "Method:  (built-in LumenvilLiteBuilder.Build)"
                 : $"Method:  {project.executeMethod}";
+
+            var stepsPart = string.Empty;
+            if (_useGitSteps && project.preBuildSteps != null && project.preBuildSteps.Length > 0)
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.Append($"Pre-build git steps ({project.preBuildSteps.Length}):\n");
+                for (int i = 0; i < project.preBuildSteps.Length; i++)
+                {
+                    sb.Append($"  {i + 1}. git ").Append(PreviewStep(project.preBuildSteps[i])).Append('\n');
+                }
+                sb.Append('\n');
+                stepsPart = sb.ToString();
+            }
+            else if (_useGitSteps)
+            {
+                stepsPart = "Pre-build git steps: none configured (toggle has no effect).\n\n";
+            }
+
             var prompt =
                 $"Start build for '{project.name}'?\n\n" +
+                stepsPart +
                 $"Target:  {target}\n" +
                 $"Backend: {backend}\n" +
                 (string.IsNullOrEmpty(defines) ? string.Empty : $"Defines: {defines}\n") +
@@ -490,7 +534,8 @@ namespace LumenvilLite
                     projectName = project.name,
                     target = target,
                     backend = backend,
-                    defines = defines
+                    defines = defines,
+                    runPreBuildSteps = _useGitSteps
                 }, _pollCts.Token);
 
                 if (response != null && response.started)
@@ -500,6 +545,10 @@ namespace LumenvilLite
                     ShowNotification(new GUIContent($"Build started: {project.name}"));
                     _buildTriggerMessage = $"Build pid {info?.pid}, output: {output}";
                     _lastPollTime = 0;
+                }
+                else if (response != null && response.errorCode == "prebuild_failed")
+                {
+                    HandlePreBuildFailure(response);
                 }
                 else
                 {
@@ -609,6 +658,70 @@ namespace LumenvilLite
             };
             GUI.Label(rect, label, labelStyle);
             EditorGUILayout.Space(4);
+        }
+
+        private static string PreviewStep(GitStep step)
+        {
+            if (step == null) return "(empty)";
+            if (string.Equals(step.kind, "custom", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.IsNullOrEmpty(step.customCommand) ? "(empty)" : step.customCommand.Trim();
+            }
+            var preset = (step.preset ?? string.Empty).ToLowerInvariant();
+            var head = preset switch
+            {
+                "fetch"    => "fetch",
+                "pull"     => "pull",
+                "checkout" => "checkout",
+                "restore"  => "restore",
+                "reset"    => "reset",
+                "status"   => "status",
+                "clean"    => "clean",
+                _          => "status"
+            };
+            var args = (step.args ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(args))
+            {
+                if (preset == "restore") return "restore .";
+                if (preset == "reset")   return "reset --hard";
+                if (preset == "clean")   return "clean -fd";
+                return head;
+            }
+            return $"{head} {args}";
+        }
+
+        private void HandlePreBuildFailure(BuildStartResponse response)
+        {
+            var failed = response.preBuildResults != null && response.preBuildResults.Length > 0
+                ? response.preBuildResults[response.preBuildResults.Length - 1]
+                : null;
+            var summary = failed != null
+                ? $"Step #{failed.stepIndex + 1} ({failed.command}) exited with {failed.exitCode}.\n\n" +
+                  (string.IsNullOrWhiteSpace(failed.stderr) ? "(no stderr)" : failed.stderr.Trim())
+                : (response.error ?? "Pre-build step failed.");
+
+            _buildTriggerMessage = $"Pre-build failed: {(failed != null ? failed.command : "?")}";
+
+            // DisplayDialogComplex returns 0 for the first button (Copy Log).
+            var pressed = EditorUtility.DisplayDialogComplex(
+                "Pre-build failed",
+                $"The build was not started because a git step failed.\n\n{summary}",
+                "Copy Log", "OK", "");
+            if (pressed == 0 && response.preBuildResults != null && response.preBuildResults.Length > 0)
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var r in response.preBuildResults)
+                {
+                    sb.Append($"=== step #{r.stepIndex + 1}: {r.command} (exit {r.exitCode}) ===\n");
+                    if (!string.IsNullOrEmpty(r.stdout)) sb.Append(r.stdout);
+                    if (!string.IsNullOrEmpty(r.stderr))
+                    {
+                        sb.Append("\n--- stderr ---\n").Append(r.stderr);
+                    }
+                    sb.Append("\n\n");
+                }
+                EditorGUIUtility.systemCopyBuffer = sb.ToString();
+            }
         }
 
         private bool IsEditorOpenOnProject(string projectPath, out int pid)

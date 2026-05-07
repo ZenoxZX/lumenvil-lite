@@ -40,8 +40,10 @@ public static class BuildControlEndpoint
                 "editor_open"       => Results.Conflict(response),
                 "invalid_target"    => Results.BadRequest(response),
                 "project_path_missing" => Results.BadRequest(response),
+                "project_invalid"   => Results.BadRequest(response),
                 "unsupported_platform" => Results.BadRequest(response),
                 "unity_exe_missing" => Results.UnprocessableEntity(response),
+                "prebuild_failed"   => Results.UnprocessableEntity(response),
                 _                   => Results.Json(response, statusCode: 500)
             };
         });
