@@ -166,7 +166,7 @@ public sealed class BuildLauncher
                 ErrorCode: "unity_exe_missing");
         }
 
-        var timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
         var outputPath = Path.Combine(StoragePaths.BuildsRoot, project.Name, request.Target, timestamp);
         Directory.CreateDirectory(outputPath);
 
