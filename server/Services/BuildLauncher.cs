@@ -248,9 +248,21 @@ public sealed class BuildLauncher
             var captured = info;
             process.Exited += (_, _) =>
             {
+                // Process.ExitCode can throw "Process must exit before
+                // requested information can be determined" when read too
+                // soon after the event fires. WaitForExit() with no
+                // timeout flushes Win32's bookkeeping so the exit code
+                // is observable.
                 int exitCode;
-                try { exitCode = process.ExitCode; }
-                catch { exitCode = -1; }
+                try
+                {
+                    process.WaitForExit();
+                    exitCode = process.ExitCode;
+                }
+                catch
+                {
+                    exitCode = -1;
+                }
 
                 var outcome = exitCode == 0 ? LastBuildOutcome.Success : LastBuildOutcome.Failed;
                 RecordCompletion(captured, exitCode, outcome);
@@ -365,8 +377,15 @@ public sealed class BuildLauncher
             if (process.HasExited)
             {
                 int exitCode;
-                try { exitCode = process.ExitCode; }
-                catch { exitCode = -1; }
+                try
+                {
+                    process.WaitForExit();
+                    exitCode = process.ExitCode;
+                }
+                catch
+                {
+                    exitCode = -1;
+                }
                 var outcome = exitCode == 0 ? LastBuildOutcome.Success : LastBuildOutcome.Failed;
                 FinaliseFromPolling(info, exitCode, outcome);
                 return null;
@@ -375,7 +394,11 @@ public sealed class BuildLauncher
         }
         catch (ArgumentException)
         {
-            FinaliseFromPolling(info, -1, LastBuildOutcome.Failed);
+            // Process gone — we have no exit code, but the previous "find
+            // by pid" path can disappear well after the build genuinely
+            // finished, so default to Unknown rather than Failed and let
+            // the user inspect the log.
+            FinaliseFromPolling(info, -1, LastBuildOutcome.Unknown);
             return null;
         }
     }

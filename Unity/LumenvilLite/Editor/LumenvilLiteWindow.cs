@@ -45,6 +45,7 @@ namespace LumenvilLite
         private const double ProjectsRefreshInterval = 30;
 
         private Vector2 _scrollPosition;
+        private Vector2 _logTailScroll;
 
         private GUIStyle _titleStyle;
         private GUIStyle _sectionHeaderStyle;
@@ -665,20 +666,14 @@ namespace LumenvilLite
                 EditorGUILayout.LabelField(
                     $"{active.projectName} • {active.target} • {active.backend}",
                     _labelMutedStyle);
-                EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField($"Output: {active.outputPath}", _labelMutedStyle);
-                DrawCopyLogButton(build);
-                EditorGUILayout.EndHorizontal();
             }
             else if (last != null && !string.IsNullOrEmpty(last.outputPath))
             {
                 EditorGUILayout.LabelField(
                     $"{last.projectName} • {last.target} • {last.backend}",
                     _labelMutedStyle);
-                EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField($"Output: {last.outputPath}", _labelMutedStyle);
-                DrawCopyLogButton(build);
-                EditorGUILayout.EndHorizontal();
                 EditorGUILayout.LabelField(
                     $"Exit code: {last.exitCode}    Started: {last.startedAtUtc}    Finished: {last.finishedAtUtc}",
                     _labelMutedStyle);
@@ -701,15 +696,29 @@ namespace LumenvilLite
 
             if (build.logTail != null && build.logTail.Length > 0)
             {
+                EditorGUILayout.BeginHorizontal();
                 _showLogTail = EditorGUILayout.Foldout(_showLogTail, $"Log tail ({build.logTail.Length} lines)");
+                GUILayout.FlexibleSpace();
+                DrawCopyLogButton(build);
+                EditorGUILayout.EndHorizontal();
                 if (_showLogTail)
                 {
-                    EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                    _logTailScroll = EditorGUILayout.BeginScrollView(
+                        _logTailScroll,
+                        EditorStyles.helpBox,
+                        GUILayout.MaxHeight(220));
                     foreach (var line in build.logTail)
                     {
-                        GUILayout.Label(line, _logLineStyle);
+                        // Some Unity logs (e.g. ##utp:{...} progress JSON) are
+                        // hundreds of characters on a single line; clamp them
+                        // so the panel height stays manageable. The full
+                        // content is still available via Copy Log.
+                        var display = line != null && line.Length > 400
+                            ? line.Substring(0, 400) + "  …"
+                            : line;
+                        GUILayout.Label(display, _logLineStyle);
                     }
-                    EditorGUILayout.EndVertical();
+                    EditorGUILayout.EndScrollView();
                 }
             }
 
@@ -840,7 +849,7 @@ namespace LumenvilLite
             _logLineStyle = new GUIStyle(EditorStyles.label)
             {
                 fontSize = 10,
-                wordWrap = false,
+                wordWrap = true,
                 richText = false
             };
             _stylesInitialized = true;
