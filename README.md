@@ -46,11 +46,14 @@ lumenvil-lite/
         └── Editor/
             ├── LumenvilLite.Editor.asmdef
             ├── LumenvilLiteWindow.cs
+            ├── Build/
+            │   └── LumenvilLiteBuilder.cs    # Default builder + template
             ├── Models/
             ├── Services/
             ├── Settings/
             └── UI/
-                └── ProjectManagerWindow.cs
+                ├── ProjectManagerWindow.cs
+                └── ProjectStepsWindow.cs     # Pre-build git steps editor
 ```
 
 ## Setup
@@ -137,7 +140,8 @@ curl http://<windows-host>:5151/status
 | GET    | `/status`             | Aggregated `health` + `unity` + `build` (used by the editor window)  |
 | POST   | `/unity/{pid}/kill`   | Quit (graceful) or force-kill a Unity process                        |
 | GET    | `/projects`           | List build projects                                                  |
-| POST   | `/projects`           | Register a build project (`name`, `projectPath`, `executeMethod`)    |
+| POST   | `/projects`           | Register a build project (`name`, `projectPath`, `executeMethod`, `preBuildSteps`) |
+| PUT    | `/projects/{name}`    | Replace a project entry (rename allowed if the new name is free)      |
 | DELETE | `/projects/{name}`    | Remove a project                                                     |
 | POST   | `/build/start`        | Launch a batch-mode Unity build                                      |
 | GET    | `/build/active`       | Active build info or null                                            |
