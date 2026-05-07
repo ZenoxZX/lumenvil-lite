@@ -109,6 +109,26 @@ public sealed class BuildLauncher
                 var failure = preBuildResults.FirstOrDefault(r => r.ExitCode != 0);
                 if (failure != null)
                 {
+                    // Persist a 'last build' record even though Unity was
+                    // never spawned, so the editor window can show the git
+                    // output retrospectively (and not just in the rejection
+                    // dialog).
+                    var nowUtc = DateTime.UtcNow;
+                    var failedLast = new LastBuildInfo(
+                        ProjectName: project.Name,
+                        Target: request.Target,
+                        Backend: request.Backend,
+                        OutputPath: string.Empty,
+                        LogFilePath: string.Empty,
+                        Outcome: LastBuildOutcome.Failed,
+                        ExitCode: failure.ExitCode,
+                        StartedAtUtc: nowUtc,
+                        FinishedAtUtc: nowUtc)
+                    {
+                        PreBuildResults = preBuildResults
+                    };
+                    WriteLastBuild(failedLast);
+
                     var stderr = string.IsNullOrWhiteSpace(failure.Stderr)
                         ? "(no stderr)"
                         : failure.Stderr.Trim();
@@ -123,7 +143,7 @@ public sealed class BuildLauncher
                 }
             }
 
-            var response = LaunchUnchecked(request, project);
+            var response = LaunchUnchecked(request, project, preBuildResults);
             return response with { PreBuildResults = preBuildResults };
         }
     }
@@ -167,7 +187,10 @@ public sealed class BuildLauncher
                 Outcome: LastBuildOutcome.Cancelled,
                 ExitCode: -1,
                 StartedAtUtc: active.StartedAtUtc,
-                FinishedAtUtc: DateTime.UtcNow);
+                FinishedAtUtc: DateTime.UtcNow)
+            {
+                PreBuildResults = active.PreBuildResults ?? Array.Empty<PreBuildStepResult>()
+            };
             WriteLastBuild(last);
             ClearState();
             return new BuildCancelResponse(true, null);
@@ -175,7 +198,10 @@ public sealed class BuildLauncher
     }
 
     [SupportedOSPlatform("windows")]
-    private BuildStartResponse LaunchUnchecked(BuildStartRequest request, ProjectEntry project)
+    private BuildStartResponse LaunchUnchecked(
+        BuildStartRequest request,
+        ProjectEntry project,
+        IReadOnlyList<PreBuildStepResult> preBuildResults)
     {
         StoragePaths.EnsureRoot();
         Directory.CreateDirectory(StoragePaths.BuildsRoot);
@@ -258,7 +284,10 @@ public sealed class BuildLauncher
             OutputPath: outputPath,
             LogFilePath: logFile,
             Pid: process.Id,
-            StartedAtUtc: DateTime.UtcNow);
+            StartedAtUtc: DateTime.UtcNow)
+        {
+            PreBuildResults = preBuildResults
+        };
 
         WriteState(info);
 
@@ -314,6 +343,12 @@ public sealed class BuildLauncher
             {
                 return;
             }
+            // Prefer the persisted state's pre-build results (they survived
+            // a server restart); fall back to the captured copy if the
+            // state file was reset.
+            var preBuildResults = current.PreBuildResults?.Count > 0
+                ? current.PreBuildResults
+                : active.PreBuildResults;
             var last = new LastBuildInfo(
                 ProjectName: active.ProjectName,
                 Target: active.Target,
@@ -323,7 +358,10 @@ public sealed class BuildLauncher
                 Outcome: outcome,
                 ExitCode: exitCode,
                 StartedAtUtc: active.StartedAtUtc,
-                FinishedAtUtc: DateTime.UtcNow);
+                FinishedAtUtc: DateTime.UtcNow)
+            {
+                PreBuildResults = preBuildResults ?? Array.Empty<PreBuildStepResult>()
+            };
             WriteLastBuild(last);
             ClearState();
         }
@@ -438,7 +476,10 @@ public sealed class BuildLauncher
             Outcome: outcome,
             ExitCode: exitCode,
             StartedAtUtc: active.StartedAtUtc,
-            FinishedAtUtc: DateTime.UtcNow);
+            FinishedAtUtc: DateTime.UtcNow)
+        {
+            PreBuildResults = active.PreBuildResults ?? Array.Empty<PreBuildStepResult>()
+        };
         WriteLastBuild(last);
         ClearState();
     }

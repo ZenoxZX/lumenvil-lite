@@ -11,7 +11,7 @@ and this package adheres to [Semantic Versioning](https://semver.org/).
 - **Pre-build git steps** per project. Each project entry can now carry an ordered list of git operations (Fetch, Pull, Checkout, Restore, Reset, Status, Clean, or a free-form Custom command). The list lives in `projects.json` on the server, so every Mac that talks to the same server sees the same steps.
 - **Use git pre-build steps** toggle on the Build Trigger card. When on, the server runs the project's steps (in order, against `projectPath`) before launching Unity; the first non-zero exit aborts the chain and the build never starts.
 - **Edit Steps...** popup (`ProjectStepsWindow`) for managing the step list — add, remove, reorder, switch between preset and custom kinds. Saving PUTs the updated project entry to `/projects/{name}`.
-- Pre-build failures surface in a dialog with a **Copy Log** action that puts every step's stdout / stderr (success and the failing one) on the clipboard.
+- Pre-build failures surface in a dialog with a pointer to the Build panel; the panel now keeps a foldout for each step (command, exit code, stdout, stderr) and a Copy button that joins the whole chain to the clipboard. Step results survive between polls because the server persists them on `state.json` / `last-build.json`.
 
 ### Server contract
 `POST /build/start` body gains `runPreBuildSteps: bool`. The response gains `preBuildResults: [{ stepIndex, command, exitCode, stdout, stderr }]` — populated even on success so the chain is auditable. New error code `prebuild_failed` (HTTP 422) when a step exits non-zero.

@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using LumenvilLite.Models;
@@ -20,6 +21,8 @@ namespace LumenvilLite
         private double _lastPollTime;
         private bool _showSettings;
         private bool _showLogTail;
+        private bool _showPreBuildSteps = true;
+        private readonly HashSet<int> _expandedPreBuildSteps = new HashSet<int>();
 
         private ConnectionState _connectionState = ConnectionState.Unknown;
         private string _connectionMessage;
@@ -612,6 +615,114 @@ namespace LumenvilLite
             }
         }
 
+        private void DrawPreBuildResults(PreBuildStepResult[] results)
+        {
+            if (results == null || results.Length == 0)
+            {
+                return;
+            }
+
+            var failedCount = 0;
+            for (int i = 0; i < results.Length; i++)
+            {
+                if (results[i] != null && results[i].exitCode != 0) failedCount++;
+            }
+
+            EditorGUILayout.BeginHorizontal();
+            var label = failedCount > 0
+                ? $"Pre-build steps ({results.Length}, {failedCount} failed)"
+                : $"Pre-build steps ({results.Length})";
+            _showPreBuildSteps = EditorGUILayout.Foldout(_showPreBuildSteps, label);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Copy", GUILayout.Width(60)))
+            {
+                EditorGUIUtility.systemCopyBuffer = JoinPreBuildResults(results);
+                ShowNotification(new GUIContent($"{results.Length} step logs copied"));
+            }
+            EditorGUILayout.EndHorizontal();
+
+            if (!_showPreBuildSteps)
+            {
+                return;
+            }
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            for (int i = 0; i < results.Length; i++)
+            {
+                DrawPreBuildResultRow(i, results[i]);
+            }
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawPreBuildResultRow(int index, PreBuildStepResult result)
+        {
+            if (result == null) return;
+
+            var ok = result.exitCode == 0;
+            var dotColor = ok
+                ? new Color(0.30f, 0.78f, 0.40f)
+                : new Color(0.85f, 0.30f, 0.30f);
+
+            EditorGUILayout.BeginHorizontal();
+            DrawDot(dotColor);
+            var header = $"#{index + 1}  {result.command}    exit {result.exitCode}";
+            var expanded = _expandedPreBuildSteps.Contains(index);
+            var newExpanded = EditorGUILayout.Foldout(expanded, header);
+            if (newExpanded != expanded)
+            {
+                if (newExpanded) _expandedPreBuildSteps.Add(index);
+                else _expandedPreBuildSteps.Remove(index);
+            }
+            EditorGUILayout.EndHorizontal();
+
+            if (!newExpanded)
+            {
+                return;
+            }
+
+            EditorGUI.indentLevel++;
+            if (!string.IsNullOrEmpty(result.stdout))
+            {
+                EditorGUILayout.LabelField("stdout", EditorStyles.miniBoldLabel);
+                EditorGUILayout.SelectableLabel(
+                    Trim(result.stdout, 4000),
+                    EditorStyles.textArea,
+                    GUILayout.MinHeight(40),
+                    GUILayout.MaxHeight(160));
+            }
+            if (!string.IsNullOrEmpty(result.stderr))
+            {
+                EditorGUILayout.LabelField("stderr", EditorStyles.miniBoldLabel);
+                EditorGUILayout.SelectableLabel(
+                    Trim(result.stderr, 4000),
+                    EditorStyles.textArea,
+                    GUILayout.MinHeight(40),
+                    GUILayout.MaxHeight(160));
+            }
+            if (string.IsNullOrEmpty(result.stdout) && string.IsNullOrEmpty(result.stderr))
+            {
+                EditorGUILayout.LabelField("(no output)", _labelMutedStyle);
+            }
+            EditorGUI.indentLevel--;
+        }
+
+        private static string JoinPreBuildResults(PreBuildStepResult[] results)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var r in results)
+            {
+                if (r == null) continue;
+                sb.Append($"=== step #{r.stepIndex + 1}: {r.command} (exit {r.exitCode}) ===\n");
+                if (!string.IsNullOrEmpty(r.stdout)) sb.Append(r.stdout);
+                if (!string.IsNullOrEmpty(r.stderr))
+                {
+                    sb.Append("\n--- stderr ---\n").Append(r.stderr);
+                }
+                sb.Append("\n\n");
+            }
+            return sb.ToString();
+        }
+
         private void DrawCopyLogButton(BuildStatusResponse build)
         {
             var hasLines = build?.logTail != null && build.logTail.Length > 0;
@@ -695,33 +806,23 @@ namespace LumenvilLite
             var failed = response.preBuildResults != null && response.preBuildResults.Length > 0
                 ? response.preBuildResults[response.preBuildResults.Length - 1]
                 : null;
-            var summary = failed != null
-                ? $"Step #{failed.stepIndex + 1} ({failed.command}) exited with {failed.exitCode}.\n\n" +
-                  (string.IsNullOrWhiteSpace(failed.stderr) ? "(no stderr)" : failed.stderr.Trim())
+            var headline = failed != null
+                ? $"Step #{failed.stepIndex + 1} ({failed.command}) exited with {failed.exitCode}."
                 : (response.error ?? "Pre-build step failed.");
 
             _buildTriggerMessage = $"Pre-build failed: {(failed != null ? failed.command : "?")}";
-
-            // DisplayDialogComplex returns 0 for the first button (Copy Log).
-            var pressed = EditorUtility.DisplayDialogComplex(
-                "Pre-build failed",
-                $"The build was not started because a git step failed.\n\n{summary}",
-                "Copy Log", "OK", "");
-            if (pressed == 0 && response.preBuildResults != null && response.preBuildResults.Length > 0)
+            _showPreBuildSteps = true;
+            _expandedPreBuildSteps.Clear();
+            if (failed != null)
             {
-                var sb = new System.Text.StringBuilder();
-                foreach (var r in response.preBuildResults)
-                {
-                    sb.Append($"=== step #{r.stepIndex + 1}: {r.command} (exit {r.exitCode}) ===\n");
-                    if (!string.IsNullOrEmpty(r.stdout)) sb.Append(r.stdout);
-                    if (!string.IsNullOrEmpty(r.stderr))
-                    {
-                        sb.Append("\n--- stderr ---\n").Append(r.stderr);
-                    }
-                    sb.Append("\n\n");
-                }
-                EditorGUIUtility.systemCopyBuffer = sb.ToString();
+                _expandedPreBuildSteps.Add(failed.stepIndex);
             }
+
+            EditorUtility.DisplayDialog(
+                "Pre-build failed",
+                $"The build was not started because a git step failed.\n\n{headline}\n\n" +
+                "Open the Build panel — the Pre-build steps section is expanded on the failing step's stdout/stderr, with a Copy button to grab the whole chain.",
+                "OK");
         }
 
         private bool IsEditorOpenOnProject(string projectPath, out int pid)
@@ -806,6 +907,14 @@ namespace LumenvilLite
             {
                 EditorGUILayout.LabelField($"Finished: {build.finishedAtUtc}", _labelMutedStyle);
             }
+
+            // Pre-build git step output (when present). Active build's
+            // results take precedence; otherwise show whatever ran for
+            // the last completed (or refused) build.
+            var preResults = active?.preBuildResults != null && active.preBuildResults.Length > 0
+                ? active.preBuildResults
+                : last?.preBuildResults;
+            DrawPreBuildResults(preResults);
 
             if (build.logTail != null && build.logTail.Length > 0)
             {

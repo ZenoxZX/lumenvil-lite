@@ -125,6 +125,7 @@ namespace LumenvilLite.Models
         public string logFilePath;
         public int pid;
         public string startedAtUtc;
+        public PreBuildStepResult[] preBuildResults;
     }
 
     [Serializable]
@@ -139,6 +140,7 @@ namespace LumenvilLite.Models
         public int exitCode;
         public string startedAtUtc;
         public string finishedAtUtc;
+        public PreBuildStepResult[] preBuildResults;
     }
 
     [Serializable]

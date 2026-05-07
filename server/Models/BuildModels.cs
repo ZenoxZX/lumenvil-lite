@@ -27,7 +27,15 @@ public sealed record ActiveBuildInfo(
     string OutputPath,
     string LogFilePath,
     int Pid,
-    DateTime StartedAtUtc);
+    DateTime StartedAtUtc)
+{
+    /// <summary>
+    /// Pre-build step results captured before this build's Unity process
+    /// was spawned. Empty when the build was started without
+    /// <c>runPreBuildSteps</c>.
+    /// </summary>
+    public IReadOnlyList<PreBuildStepResult> PreBuildResults { get; init; } = Array.Empty<PreBuildStepResult>();
+}
 
 public enum LastBuildOutcome
 {
@@ -46,7 +54,15 @@ public sealed record LastBuildInfo(
     LastBuildOutcome Outcome,
     int ExitCode,
     DateTime StartedAtUtc,
-    DateTime FinishedAtUtc);
+    DateTime FinishedAtUtc)
+{
+    /// <summary>
+    /// Pre-build step results captured before the Unity process was
+    /// spawned (or, on prebuild_failed, the partial chain up to and
+    /// including the failing step).
+    /// </summary>
+    public IReadOnlyList<PreBuildStepResult> PreBuildResults { get; init; } = Array.Empty<PreBuildStepResult>();
+}
 
 public sealed record BuildStartResponse(
     bool Started,
