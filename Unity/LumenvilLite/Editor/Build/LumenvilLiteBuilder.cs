@@ -160,22 +160,41 @@ public static class LumenvilLiteBuilder
 
     private static string GetExecutableName(BuildTarget target)
     {
+        // Use the project's PlayerSettings.productName so the produced
+        // executable matches the launch option configured on Steamworks
+        // (and any other launcher). Falls back to "Game" only if the
+        // product name is empty or sanitizes to nothing.
+        var baseName = SanitizeFileName(PlayerSettings.productName);
+        if (string.IsNullOrWhiteSpace(baseName)) baseName = "Game";
+
         switch (target)
         {
             case BuildTarget.StandaloneWindows:
             case BuildTarget.StandaloneWindows64:
-                return "Game.exe";
+                return baseName + ".exe";
             case BuildTarget.StandaloneOSX:
-                return "Game.app";
+                return baseName + ".app";
             case BuildTarget.StandaloneLinux64:
-                return "Game";
+                return baseName;
             case BuildTarget.Android:
-                return "Game.apk";
+                return baseName + ".apk";
             case BuildTarget.WebGL:
                 return string.Empty;
             default:
-                return "Game";
+                return baseName;
         }
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return name;
+        var invalid = Path.GetInvalidFileNameChars();
+        var chars = name.ToCharArray();
+        for (int i = 0; i < chars.Length; i++)
+        {
+            if (Array.IndexOf(invalid, chars[i]) >= 0) chars[i] = '_';
+        }
+        return new string(chars).Trim();
     }
 }
 #endif
