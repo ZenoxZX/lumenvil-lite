@@ -156,7 +156,7 @@ Each registered project carries two ordered lists of steps — one for **pre-bui
 - **Preset → Notify**: Slack webhook, Discord webhook, generic HTTP POST.
 - **Custom**: free-form command line run through your choice of interpreter — `bash` (Git for Windows `bash.exe`, default), `cmd`, `pwsh`, or `direct` (no shell, first token is the executable).
 
-Post-build steps see the build outcome in their environment: `LUMENVIL_OUTCOME`, `LUMENVIL_EXIT_CODE`, `LUMENVIL_PROJECT`, `LUMENVIL_TARGET`, `LUMENVIL_OUTPUT`. Slack/Discord notify steps prebake those into their webhook body automatically.
+Post-build steps see the build outcome in their environment: `LUMENVIL_OUTCOME`, `LUMENVIL_EXIT_CODE`, `LUMENVIL_PROJECT`, `LUMENVIL_TARGET`, `LUMENVIL_OUTPUT`, plus `LUMENVIL_APP_VERSION` (Unity `Application.version`, available when the built-in builder is used — it writes the value to `<output>/.lumenvil-version.txt` which the server reads back). Slack/Discord notify steps prebake those into their webhook body automatically.
 
 Manage both lists from the editor window via **Edit Steps...** — the popup has Pre-build / Post-build tabs. Steps live in `projects.json` on the server, so every client that talks to the same server sees the same lists. The build response and `last-build.json` both carry `preBuildResults` and `postBuildResults` arrays (stdout / stderr / exit code per step). The Build status panel renders these as foldouts with **Copy** buttons.
 
