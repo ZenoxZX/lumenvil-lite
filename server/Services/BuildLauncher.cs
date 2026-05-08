@@ -244,6 +244,15 @@ public sealed class BuildLauncher
             args.Add("-lumenvilDefines");
             args.Add(QuotePath(request.Defines));
         }
+        // Bare-flag style: only emit the arg when the flag is on. The builder
+        // treats absence as false. Profiler / deep-profiling / script-debugging
+        // depend on Development; we still send each one independently and let
+        // the builder enforce the dependency, so a stale UI cannot silently
+        // produce a release build with -allowDebugging set.
+        if (request.Development) args.Add("-lumenvilDevelopment");
+        if (request.AutoConnectProfiler) args.Add("-lumenvilAutoConnectProfiler");
+        if (request.DeepProfiling) args.Add("-lumenvilDeepProfiling");
+        if (request.ScriptDebugging) args.Add("-lumenvilScriptDebugging");
 
         var startInfo = new ProcessStartInfo
         {

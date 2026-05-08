@@ -42,6 +42,10 @@ namespace LumenvilLite
         private int _selectedBackendIndex;
         private string _buildDefines = string.Empty;
         private bool _useGitSteps;
+        private bool _development;
+        private bool _autoConnectProfiler;
+        private bool _deepProfiling;
+        private bool _scriptDebugging;
         private bool _buildStartInFlight;
         private bool _buildCancelInFlight;
         private string _buildTriggerMessage;
@@ -392,6 +396,40 @@ namespace LumenvilLite
                 new GUIContent("Defines", "Optional, semicolon-separated. Leave empty to skip."),
                 _buildDefines);
 
+            // Build flags. Development is the master switch — the other three
+            // are no-ops in a release build, so we disable + force-false them
+            // when Development is off so the user can't compose an invalid
+            // combination.
+            _development = EditorGUILayout.ToggleLeft(
+                new GUIContent(
+                    "Development build",
+                    "BuildOptions.Development. Required for the profiler / script-debugging flags below."),
+                _development);
+            using (new EditorGUI.DisabledScope(!_development))
+            {
+                if (!_development)
+                {
+                    _autoConnectProfiler = false;
+                    _deepProfiling = false;
+                    _scriptDebugging = false;
+                }
+                _autoConnectProfiler = EditorGUILayout.ToggleLeft(
+                    new GUIContent(
+                        "Auto connect profiler",
+                        "BuildOptions.ConnectWithProfiler. Player tries to attach to the editor's profiler on launch."),
+                    _autoConnectProfiler);
+                _deepProfiling = EditorGUILayout.ToggleLeft(
+                    new GUIContent(
+                        "Deep profiling support",
+                        "BuildOptions.EnableDeepProfilingSupport. Heavy — every managed call gets a sample."),
+                    _deepProfiling);
+                _scriptDebugging = EditorGUILayout.ToggleLeft(
+                    new GUIContent(
+                        "Script debugging",
+                        "BuildOptions.AllowDebugging. Lets a managed debugger attach to the player."),
+                    _scriptDebugging);
+            }
+
             // Pre-build git steps toggle. Steps live on the project entry
             // server-side, so 'Edit Steps...' opens a popup that PUTs the
             // updated entry back to /projects/{name}.
@@ -514,12 +552,14 @@ namespace LumenvilLite
                 stepsPart = "Pre-build git steps: none configured (toggle has no effect).\n\n";
             }
 
+            var flagsLabel = BuildFlagsLabel();
             var prompt =
                 $"Start build for '{project.name}'?\n\n" +
                 stepsPart +
                 $"Target:  {target}\n" +
                 $"Backend: {backend}\n" +
                 (string.IsNullOrEmpty(defines) ? string.Empty : $"Defines: {defines}\n") +
+                (string.IsNullOrEmpty(flagsLabel) ? string.Empty : $"Flags:   {flagsLabel}\n") +
                 methodLabel;
 
             if (!EditorUtility.DisplayDialog("Start build", prompt, "Start", "Cancel"))
@@ -538,7 +578,11 @@ namespace LumenvilLite
                     target = target,
                     backend = backend,
                     defines = defines,
-                    runPreBuildSteps = _useGitSteps
+                    runPreBuildSteps = _useGitSteps,
+                    development = _development,
+                    autoConnectProfiler = _development && _autoConnectProfiler,
+                    deepProfiling = _development && _deepProfiling,
+                    scriptDebugging = _development && _scriptDebugging
                 }, _pollCts.Token);
 
                 if (response != null && response.started)
@@ -769,6 +813,16 @@ namespace LumenvilLite
             };
             GUI.Label(rect, label, labelStyle);
             EditorGUILayout.Space(4);
+        }
+
+        private string BuildFlagsLabel()
+        {
+            if (!_development) return string.Empty;
+            var parts = new List<string> { "Development" };
+            if (_autoConnectProfiler) parts.Add("AutoConnectProfiler");
+            if (_deepProfiling)       parts.Add("DeepProfiling");
+            if (_scriptDebugging)     parts.Add("ScriptDebugging");
+            return string.Join(" + ", parts);
         }
 
         private static string PreviewStep(GitStep step)

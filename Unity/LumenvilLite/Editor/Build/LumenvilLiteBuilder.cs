@@ -34,10 +34,27 @@ public static class LumenvilLiteBuilder
             return null;
         }
 
+        bool HasFlag(string name)
+        {
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (string.Equals(args[i], name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         var targetArg  = GetArg("-lumenvilTarget");
         var backendArg = GetArg("-lumenvilBackend");
         var output     = GetArg("-lumenvilOutput");
         var defines    = GetArg("-lumenvilDefines");
+
+        var development         = HasFlag("-lumenvilDevelopment");
+        var autoConnectProfiler = HasFlag("-lumenvilAutoConnectProfiler");
+        var deepProfiling       = HasFlag("-lumenvilDeepProfiling");
+        var scriptDebugging     = HasFlag("-lumenvilScriptDebugging");
 
         if (string.IsNullOrEmpty(targetArg) || string.IsNullOrEmpty(output))
         {
@@ -83,17 +100,35 @@ public static class LumenvilLiteBuilder
         Directory.CreateDirectory(output);
         var locationPath = Path.Combine(output, GetExecutableName(buildTarget));
 
+        // Development is the master switch — the other three flags do nothing
+        // (or worse, get baked into a release build) without it. The server
+        // already only sends profiler/debug args alongside Development, but
+        // we re-check here so a stale CLI invocation can't slip through.
+        var buildOptions = BuildOptions.None;
+        if (development)
+        {
+            buildOptions |= BuildOptions.Development;
+            if (autoConnectProfiler) buildOptions |= BuildOptions.ConnectWithProfiler;
+            if (deepProfiling)       buildOptions |= BuildOptions.EnableDeepProfilingSupport;
+            if (scriptDebugging)     buildOptions |= BuildOptions.AllowDebugging;
+        }
+        else if (autoConnectProfiler || deepProfiling || scriptDebugging)
+        {
+            Debug.LogWarning("[LumenvilLite] Profiler / deep-profiling / script-debugging " +
+                             "ignored because -lumenvilDevelopment was not set.");
+        }
+
         var options = new BuildPlayerOptions
         {
             scenes = scenes,
             locationPathName = locationPath,
             target = buildTarget,
             targetGroup = group,
-            options = BuildOptions.None
+            options = buildOptions
         };
 
         Debug.Log($"[LumenvilLite] Building target={buildTarget} backend={backendArg} " +
-                  $"defines='{defines}' scenes={scenes.Length} output='{locationPath}'");
+                  $"defines='{defines}' options={buildOptions} scenes={scenes.Length} output='{locationPath}'");
 
         var report = BuildPipeline.BuildPlayer(options);
         var summary = report.summary;

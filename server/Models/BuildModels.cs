@@ -18,6 +18,15 @@ public sealed record BuildStartRequest(
     /// for "I just want to test the build, don't touch git" runs.
     /// </summary>
     public bool RunPreBuildSteps { get; init; } = false;
+
+    // Unity build flags. Development is the master switch; the other three
+    // are no-ops in a release build, so the builder ignores them when
+    // Development=false (defence-in-depth in case the UI ever sends them
+    // anyway). Defaults match Unity's own "release build" out-of-the-box.
+    public bool Development { get; init; } = false;
+    public bool AutoConnectProfiler { get; init; } = false;
+    public bool DeepProfiling { get; init; } = false;
+    public bool ScriptDebugging { get; init; } = false;
 }
 
 public sealed record ActiveBuildInfo(

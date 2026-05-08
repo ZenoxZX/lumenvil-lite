@@ -113,6 +113,12 @@ namespace LumenvilLite.Models
         public string backend;   // "Il2cpp" or "Mono"
         public string defines;
         public bool runPreBuildSteps;
+        // Build flags. Development is the master switch; the other three
+        // are no-ops without it and the builder enforces that.
+        public bool development;
+        public bool autoConnectProfiler;
+        public bool deepProfiling;
+        public bool scriptDebugging;
     }
 
     [Serializable]
