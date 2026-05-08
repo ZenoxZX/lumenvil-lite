@@ -22,7 +22,9 @@ namespace LumenvilLite
         private bool _showSettings;
         private bool _showLogTail;
         private bool _showPreBuildSteps = true;
+        private bool _showPostBuildSteps = true;
         private readonly HashSet<int> _expandedPreBuildSteps = new HashSet<int>();
+        private readonly HashSet<int> _expandedPostBuildSteps = new HashSet<int>();
 
         private ConnectionState _connectionState = ConnectionState.Unknown;
         private string _connectionMessage;
@@ -42,6 +44,7 @@ namespace LumenvilLite
         private int _selectedBackendIndex;
         private string _buildDefines = string.Empty;
         private bool _useGitSteps;
+        private bool _usePostSteps;
         private bool _development;
         private bool _autoConnectProfiler;
         private bool _deepProfiling;
@@ -430,20 +433,26 @@ namespace LumenvilLite
                     _scriptDebugging);
             }
 
-            // Pre-build git steps toggle. Steps live on the project entry
-            // server-side, so 'Edit Steps...' opens a popup that PUTs the
-            // updated entry back to /projects/{name}.
+            // Pre/post build step toggles. Steps live on the project entry
+            // server-side, so 'Edit Steps...' opens a popup with both phase
+            // tabs and PUTs the updated entry back to /projects/{name}.
             var currentProject = _projects.Length > 0
                 ? _projects[Mathf.Clamp(_selectedProjectIndex, 0, _projects.Length - 1)]
                 : null;
-            var stepCount = currentProject?.preBuildSteps?.Length ?? 0;
+            var preCount  = currentProject?.preBuildSteps?.Length ?? 0;
+            var postCount = currentProject?.postBuildSteps?.Length ?? 0;
 
             EditorGUILayout.BeginHorizontal();
             _useGitSteps = EditorGUILayout.ToggleLeft(
                 new GUIContent(
-                    $"Use git pre-build steps ({stepCount})",
-                    "When on, the server runs the project's git steps (in order, against its projectPath) before launching the build. Any non-zero exit cancels the build."),
+                    $"Use pre-build steps ({preCount})",
+                    "When on, the server runs the project's pre-build steps (in order, against its projectPath) before launching the build. Any non-zero exit cancels the build."),
                 _useGitSteps);
+            _usePostSteps = EditorGUILayout.ToggleLeft(
+                new GUIContent(
+                    $"Use post-build steps ({postCount})",
+                    "When on, the server runs the project's post-build steps after Unity exits — regardless of outcome. Steps see LUMENVIL_OUTCOME etc. in their environment."),
+                _usePostSteps);
             GUILayout.FlexibleSpace();
             using (new EditorGUI.DisabledScope(currentProject == null))
             {
@@ -536,21 +545,8 @@ namespace LumenvilLite
                 : $"Method:  {project.executeMethod}";
 
             var stepsPart = string.Empty;
-            if (_useGitSteps && project.preBuildSteps != null && project.preBuildSteps.Length > 0)
-            {
-                var sb = new System.Text.StringBuilder();
-                sb.Append($"Pre-build git steps ({project.preBuildSteps.Length}):\n");
-                for (int i = 0; i < project.preBuildSteps.Length; i++)
-                {
-                    sb.Append($"  {i + 1}. git ").Append(PreviewStep(project.preBuildSteps[i])).Append('\n');
-                }
-                sb.Append('\n');
-                stepsPart = sb.ToString();
-            }
-            else if (_useGitSteps)
-            {
-                stepsPart = "Pre-build git steps: none configured (toggle has no effect).\n\n";
-            }
+            stepsPart += FormatStepsBlock("Pre-build", _useGitSteps, project.preBuildSteps);
+            stepsPart += FormatStepsBlock("Post-build", _usePostSteps, project.postBuildSteps);
 
             var flagsLabel = BuildFlagsLabel();
             var prompt =
@@ -579,6 +575,7 @@ namespace LumenvilLite
                     backend = backend,
                     defines = defines,
                     runPreBuildSteps = _useGitSteps,
+                    runPostBuildSteps = _usePostSteps,
                     development = _development,
                     autoConnectProfiler = _development && _autoConnectProfiler,
                     deepProfiling = _development && _deepProfiling,
@@ -659,7 +656,17 @@ namespace LumenvilLite
             }
         }
 
-        private void DrawPreBuildResults(PreBuildStepResult[] results)
+        private void DrawPreBuildResults(PreBuildStepResult[] results) =>
+            DrawStepResults(results, "Pre-build", ref _showPreBuildSteps, _expandedPreBuildSteps);
+
+        private void DrawPostBuildResults(PreBuildStepResult[] results) =>
+            DrawStepResults(results, "Post-build", ref _showPostBuildSteps, _expandedPostBuildSteps);
+
+        private void DrawStepResults(
+            PreBuildStepResult[] results,
+            string label,
+            ref bool show,
+            HashSet<int> expanded)
         {
             if (results == null || results.Length == 0)
             {
@@ -673,10 +680,10 @@ namespace LumenvilLite
             }
 
             EditorGUILayout.BeginHorizontal();
-            var label = failedCount > 0
-                ? $"Pre-build steps ({results.Length}, {failedCount} failed)"
-                : $"Pre-build steps ({results.Length})";
-            _showPreBuildSteps = EditorGUILayout.Foldout(_showPreBuildSteps, label);
+            var heading = failedCount > 0
+                ? $"{label} steps ({results.Length}, {failedCount} failed)"
+                : $"{label} steps ({results.Length})";
+            show = EditorGUILayout.Foldout(show, heading);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Copy", GUILayout.Width(60)))
             {
@@ -685,7 +692,7 @@ namespace LumenvilLite
             }
             EditorGUILayout.EndHorizontal();
 
-            if (!_showPreBuildSteps)
+            if (!show)
             {
                 return;
             }
@@ -693,12 +700,12 @@ namespace LumenvilLite
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             for (int i = 0; i < results.Length; i++)
             {
-                DrawPreBuildResultRow(i, results[i]);
+                DrawStepResultRow(i, results[i], expanded);
             }
             EditorGUILayout.EndVertical();
         }
 
-        private void DrawPreBuildResultRow(int index, PreBuildStepResult result)
+        private void DrawStepResultRow(int index, PreBuildStepResult result, HashSet<int> expandedSet)
         {
             if (result == null) return;
 
@@ -710,12 +717,12 @@ namespace LumenvilLite
             EditorGUILayout.BeginHorizontal();
             DrawDot(dotColor);
             var header = $"#{index + 1}  {result.command}    exit {result.exitCode}";
-            var expanded = _expandedPreBuildSteps.Contains(index);
+            var expanded = expandedSet.Contains(index);
             var newExpanded = EditorGUILayout.Foldout(expanded, header);
             if (newExpanded != expanded)
             {
-                if (newExpanded) _expandedPreBuildSteps.Add(index);
-                else _expandedPreBuildSteps.Remove(index);
+                if (newExpanded) expandedSet.Add(index);
+                else expandedSet.Remove(index);
             }
             EditorGUILayout.EndHorizontal();
 
@@ -825,34 +832,38 @@ namespace LumenvilLite
             return string.Join(" + ", parts);
         }
 
-        private static string PreviewStep(GitStep step)
+        private static string PreviewStep(StepDefinition step)
         {
             if (step == null) return "(empty)";
             if (string.Equals(step.kind, "custom", StringComparison.OrdinalIgnoreCase))
             {
-                return string.IsNullOrEmpty(step.customCommand) ? "(empty)" : step.customCommand.Trim();
+                var interp = string.IsNullOrEmpty(step.interpreter) ? "bash" : step.interpreter;
+                var cmd = string.IsNullOrEmpty(step.command) ? "(empty)" : step.command.Trim();
+                return interp == "direct" ? cmd : $"{interp} {cmd}";
             }
-            var preset = (step.preset ?? string.Empty).ToLowerInvariant();
-            var head = preset switch
-            {
-                "fetch"    => "fetch",
-                "pull"     => "pull",
-                "checkout" => "checkout",
-                "restore"  => "restore",
-                "reset"    => "reset",
-                "status"   => "status",
-                "clean"    => "clean",
-                _          => "status"
-            };
+            var group = (step.group ?? "git").ToLowerInvariant();
+            var subset = (step.subset ?? string.Empty).ToLowerInvariant();
             var args = (step.args ?? string.Empty).Trim();
-            if (string.IsNullOrEmpty(args))
+            return string.IsNullOrEmpty(args)
+                ? $"{group} {subset}"
+                : $"{group} {subset} {args}";
+        }
+
+        private static string FormatStepsBlock(string label, bool toggleOn, StepDefinition[] steps)
+        {
+            if (!toggleOn) return string.Empty;
+            if (steps == null || steps.Length == 0)
             {
-                if (preset == "restore") return "restore .";
-                if (preset == "reset")   return "reset --hard";
-                if (preset == "clean")   return "clean -fd";
-                return head;
+                return $"{label} steps: none configured (toggle has no effect).\n\n";
             }
-            return $"{head} {args}";
+            var sb = new System.Text.StringBuilder();
+            sb.Append($"{label} steps ({steps.Length}):\n");
+            for (int i = 0; i < steps.Length; i++)
+            {
+                sb.Append($"  {i + 1}. ").Append(PreviewStep(steps[i])).Append('\n');
+            }
+            sb.Append('\n');
+            return sb.ToString();
         }
 
         private void HandlePreBuildFailure(BuildStartResponse response)
@@ -962,13 +973,15 @@ namespace LumenvilLite
                 EditorGUILayout.LabelField($"Finished: {build.finishedAtUtc}", _labelMutedStyle);
             }
 
-            // Pre-build git step output (when present). Active build's
-            // results take precedence; otherwise show whatever ran for
-            // the last completed (or refused) build.
+            // Pre-build step output (when present). Active build's results
+            // take precedence; otherwise show whatever ran for the last
+            // completed (or refused) build. Post-build results only exist
+            // on `last` since they fire after Unity exits.
             var preResults = active?.preBuildResults != null && active.preBuildResults.Length > 0
                 ? active.preBuildResults
                 : last?.preBuildResults;
             DrawPreBuildResults(preResults);
+            DrawPostBuildResults(last?.postBuildResults);
 
             if (build.logTail != null && build.logTail.Length > 0)
             {

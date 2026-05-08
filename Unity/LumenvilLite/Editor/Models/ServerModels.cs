@@ -72,12 +72,18 @@ namespace LumenvilLite.Models
     }
 
     [Serializable]
-    public class GitStep
+    public class StepDefinition
     {
-        public string kind = "preset";
-        public string preset;
+        public string kind = "preset";        // "preset" or "custom"
+
+        // Preset branch.
+        public string group;                  // "git" | "filesystem" | "notify"
+        public string subset;                 // e.g. "fetch", "copy", "slack"
         public string args;
-        public string customCommand;
+
+        // Custom branch.
+        public string interpreter;            // "bash" | "cmd" | "pwsh" | "direct"
+        public string command;
     }
 
     [Serializable]
@@ -96,7 +102,8 @@ namespace LumenvilLite.Models
         public string name;
         public string projectPath;
         public string executeMethod;
-        public GitStep[] preBuildSteps;
+        public StepDefinition[] preBuildSteps;
+        public StepDefinition[] postBuildSteps;
     }
 
     [Serializable]
@@ -113,6 +120,7 @@ namespace LumenvilLite.Models
         public string backend;   // "Il2cpp" or "Mono"
         public string defines;
         public bool runPreBuildSteps;
+        public bool runPostBuildSteps;
         // Build flags. Development is the master switch; the other three
         // are no-ops without it and the builder enforces that.
         public bool development;
@@ -147,6 +155,7 @@ namespace LumenvilLite.Models
         public string startedAtUtc;
         public string finishedAtUtc;
         public PreBuildStepResult[] preBuildResults;
+        public PreBuildStepResult[] postBuildResults;
     }
 
     [Serializable]

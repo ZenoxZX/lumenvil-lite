@@ -19,6 +19,12 @@ public sealed record BuildStartRequest(
     /// </summary>
     public bool RunPreBuildSteps { get; init; } = false;
 
+    /// <summary>
+    /// When true, the project's PostBuildSteps run after the Unity process
+    /// exits — regardless of outcome, so notify steps can report failures.
+    /// </summary>
+    public bool RunPostBuildSteps { get; init; } = false;
+
     // Unity build flags. Development is the master switch; the other three
     // are no-ops in a release build, so the builder ignores them when
     // Development=false (defence-in-depth in case the UI ever sends them
@@ -71,6 +77,13 @@ public sealed record LastBuildInfo(
     /// including the failing step).
     /// </summary>
     public IReadOnlyList<PreBuildStepResult> PreBuildResults { get; init; } = Array.Empty<PreBuildStepResult>();
+
+    /// <summary>
+    /// Post-build step results, in order. Empty unless the build was
+    /// started with <c>runPostBuildSteps</c> (and even then only after
+    /// the Unity process exits).
+    /// </summary>
+    public IReadOnlyList<PreBuildStepResult> PostBuildResults { get; init; } = Array.Empty<PreBuildStepResult>();
 }
 
 public sealed record BuildStartResponse(
@@ -80,7 +93,7 @@ public sealed record BuildStartResponse(
     string? ErrorCode)
 {
     /// <summary>
-    /// Results of the pre-build git steps if any ran, in order.
+    /// Results of the pre-build steps if any ran, in order.
     /// On <c>prebuild_failed</c> the last entry holds the failing
     /// step's stderr; on success this is the full successful chain
     /// for traceability.

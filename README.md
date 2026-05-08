@@ -147,11 +147,18 @@ curl http://<windows-host>:5151/status
 | GET    | `/build/active`       | Active build info or null                                            |
 | POST   | `/build/cancel`       | Kill the active build                                                |
 
-## Pre-build git steps
+## Pre-build and post-build steps
 
-Each registered project can carry an ordered list of git steps (Fetch, Pull, Checkout, Restore, Reset, Status, Clean, or a free-form Custom command). When the **Use git pre-build steps** toggle is on, the server runs them in order against the project path before spawning Unity. The first non-zero exit cancels the chain and the build never starts.
+Each registered project carries two ordered lists of steps — one for **pre-build** (run before Unity spawns; first non-zero exit cancels the build) and one for **post-build** (run after Unity exits, regardless of outcome, so failures can still notify). Each step is one of:
 
-Manage the list from the editor window via **Edit Steps...** next to the toggle. Steps live in `projects.json` on the server, so every client that talks to the same server sees the same list. The build response includes a `preBuildResults` array with each step's stdout / stderr / exit code so failures are easy to investigate (the editor dialog has a **Copy Log** button that puts the whole chain on the clipboard).
+- **Preset → Git**: Fetch, Pull, Checkout, Restore, Reset, Status, Clean, Tag.
+- **Preset → Filesystem**: Copy, Move, Delete, Mkdir, Zip (paths resolved against the project path).
+- **Preset → Notify**: Slack webhook, Discord webhook, generic HTTP POST.
+- **Custom**: free-form command line run through your choice of interpreter — `bash` (Git for Windows `bash.exe`, default), `cmd`, `pwsh`, or `direct` (no shell, first token is the executable).
+
+Post-build steps see the build outcome in their environment: `LUMENVIL_OUTCOME`, `LUMENVIL_EXIT_CODE`, `LUMENVIL_PROJECT`, `LUMENVIL_TARGET`, `LUMENVIL_OUTPUT`. Slack/Discord notify steps prebake those into their webhook body automatically.
+
+Manage both lists from the editor window via **Edit Steps...** — the popup has Pre-build / Post-build tabs. Steps live in `projects.json` on the server, so every client that talks to the same server sees the same lists. The build response and `last-build.json` both carry `preBuildResults` and `postBuildResults` arrays (stdout / stderr / exit code per step). The Build status panel renders these as foldouts with **Copy** buttons.
 
 ## Build script contract
 

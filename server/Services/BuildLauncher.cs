@@ -23,13 +23,13 @@ public sealed class BuildLauncher
     public const string DefaultExecuteMethod = "LumenvilLiteBuilder.Build";
 
     private readonly UnityProcessScanner _scanner;
-    private readonly GitRunner _gitRunner;
+    private readonly StepRunner _stepRunner;
     private readonly object _lock = new();
 
-    public BuildLauncher(UnityProcessScanner scanner, GitRunner gitRunner)
+    public BuildLauncher(UnityProcessScanner scanner, StepRunner stepRunner)
     {
         _scanner = scanner;
-        _gitRunner = gitRunner;
+        _stepRunner = stepRunner;
     }
 
     public ActiveBuildInfo? GetActive()
@@ -105,7 +105,7 @@ public sealed class BuildLauncher
             IReadOnlyList<PreBuildStepResult> preBuildResults = Array.Empty<PreBuildStepResult>();
             if (request.RunPreBuildSteps && project.PreBuildSteps.Count > 0)
             {
-                preBuildResults = _gitRunner.Run(project.PreBuildSteps, project.ProjectPath);
+                preBuildResults = _stepRunner.Run(project.PreBuildSteps, project.ProjectPath);
                 var failure = preBuildResults.FirstOrDefault(r => r.ExitCode != 0);
                 if (failure != null)
                 {
@@ -327,7 +327,26 @@ public sealed class BuildLauncher
                 }
 
                 var outcome = exitCode == 0 ? LastBuildOutcome.Success : LastBuildOutcome.Failed;
-                RecordCompletion(captured, exitCode, outcome);
+
+                // Post-build steps run after Unity exits regardless of outcome
+                // so notify steps can announce failures too. They run outside
+                // the main lock — they hit the network and disk and can take
+                // minutes, blocking /status during that window would be rude.
+                IReadOnlyList<PreBuildStepResult> postBuildResults = Array.Empty<PreBuildStepResult>();
+                if (request.RunPostBuildSteps && project.PostBuildSteps.Count > 0)
+                {
+                    var env = new Dictionary<string, string>
+                    {
+                        ["LUMENVIL_PROJECT"]   = captured.ProjectName,
+                        ["LUMENVIL_TARGET"]    = captured.Target,
+                        ["LUMENVIL_OUTCOME"]   = outcome.ToString(),
+                        ["LUMENVIL_EXIT_CODE"] = exitCode.ToString(),
+                        ["LUMENVIL_OUTPUT"]    = captured.OutputPath
+                    };
+                    postBuildResults = _stepRunner.Run(project.PostBuildSteps, project.ProjectPath, env);
+                }
+
+                RecordCompletion(captured, exitCode, outcome, postBuildResults);
                 process.Dispose();
             };
         }
@@ -341,7 +360,11 @@ public sealed class BuildLauncher
         return new BuildStartResponse(Started: true, Build: info, Error: null, ErrorCode: null);
     }
 
-    private void RecordCompletion(ActiveBuildInfo active, int exitCode, LastBuildOutcome outcome)
+    private void RecordCompletion(
+        ActiveBuildInfo active,
+        int exitCode,
+        LastBuildOutcome outcome,
+        IReadOnlyList<PreBuildStepResult> postBuildResults)
     {
         lock (_lock)
         {
@@ -369,7 +392,8 @@ public sealed class BuildLauncher
                 StartedAtUtc: active.StartedAtUtc,
                 FinishedAtUtc: DateTime.UtcNow)
             {
-                PreBuildResults = preBuildResults ?? Array.Empty<PreBuildStepResult>()
+                PreBuildResults = preBuildResults ?? Array.Empty<PreBuildStepResult>(),
+                PostBuildResults = postBuildResults ?? Array.Empty<PreBuildStepResult>()
             };
             WriteLastBuild(last);
             ClearState();
