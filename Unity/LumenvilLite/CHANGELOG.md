@@ -5,6 +5,21 @@ All notable changes to the Lumenvil Lite Unity package are documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — Unreleased
+
+### Added
+- **Three-tier step model**. A step is now either a **Preset** (Group → Subset → Args) or a **Custom** shell command (Interpreter → Command). Preset groups: **Git** (Fetch, Pull, Checkout, Restore, Reset, Status, Clean, **Tag**), **Filesystem** (Copy, Move, Delete, Mkdir, Zip — implemented via `System.IO` / `System.IO.Compression`, no shell), **Notify** (Slack, Discord, HttpPost — Slack/Discord webhooks get a prebaked JSON body).
+- **Custom step interpreter** dropdown: `bash` (default, resolves to Git for Windows `bash.exe` and falls back to `bash` on PATH), `cmd`, `pwsh`, `direct` (no shell — first token is the executable).
+- **Post-build steps** per project. Run from the Unity `Process.Exited` handler regardless of outcome (so notify steps can announce failures), but skipped on cancel and on server-restart-while-building. Each step sees `LUMENVIL_OUTCOME`, `LUMENVIL_EXIT_CODE`, `LUMENVIL_PROJECT`, `LUMENVIL_TARGET`, `LUMENVIL_OUTPUT` in its environment.
+- **Edit Steps...** popup now has Pre-build / Post-build tabs sharing the same step-row UI.
+- Build trigger card: "Use pre-build steps" + "Use post-build steps" toggles with step counts.
+- Build status panel: post-build foldouts rendered the same way as pre-build, with a Copy button.
+
+### Changed (breaking)
+- `GitStep` is gone. Step shape on the wire is now `StepDefinition { kind, group, subset, args, interpreter, command }`. Old step lists in `projects.json` are not migrated — the Windows host must delete `C:\Tools\LumenvilLite\projects.json` before re-registering projects after this deploy.
+- `BuildStartRequest` gains `runPostBuildSteps: bool`.
+- `LastBuildInfo` gains `postBuildResults: PreBuildStepResult[]` (the existing result type is reused for both phases).
+
 ## [0.3.0] — Unreleased
 
 ### Added
