@@ -100,6 +100,20 @@ public static class LumenvilLiteBuilder
         Directory.CreateDirectory(output);
         var locationPath = Path.Combine(output, GetExecutableName(buildTarget));
 
+        // Surface PlayerSettings.bundleVersion (Application.version) to the
+        // Lumenvil server so post-build steps can use it. Written before
+        // BuildPipeline.BuildPlayer because that call may rewrite the output
+        // directory; the server picks this up after Unity exits.
+        try
+        {
+            File.WriteAllText(Path.Combine(output, ".lumenvil-version.txt"),
+                Application.version ?? string.Empty);
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"[LumenvilLite] Could not write .lumenvil-version.txt: {e.Message}");
+        }
+
         // Development is the master switch — the other three flags do nothing
         // (or worse, get baked into a release build) without it. The server
         // already only sends profiler/debug args alongside Development, but

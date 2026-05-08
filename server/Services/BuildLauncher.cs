@@ -343,6 +343,27 @@ public sealed class BuildLauncher
                         ["LUMENVIL_EXIT_CODE"] = exitCode.ToString(),
                         ["LUMENVIL_OUTPUT"]    = captured.OutputPath
                     };
+
+                    // The default builder writes PlayerSettings.bundleVersion
+                    // to <output>/.lumenvil-version.txt; surface it as
+                    // LUMENVIL_APP_VERSION when present so post-build steps
+                    // can stamp uploads with the Unity Application.version.
+                    try
+                    {
+                        var versionFile = Path.Combine(captured.OutputPath, ".lumenvil-version.txt");
+                        if (File.Exists(versionFile))
+                        {
+                            var version = File.ReadAllText(versionFile).Trim();
+                            if (!string.IsNullOrEmpty(version))
+                            {
+                                env["LUMENVIL_APP_VERSION"] = version;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Missing or unreadable — wrapper has its own fallback chain.
+                    }
                     postBuildResults = _stepRunner.Run(project.PostBuildSteps, project.ProjectPath, env);
                 }
 
