@@ -9,6 +9,7 @@ namespace LumenvilLite.Settings
         private const string PortKey = "LumenvilLite.Port";
         private const string PollIntervalKey = "LumenvilLite.PollIntervalSeconds";
         private const string TimeoutKey = "LumenvilLite.TimeoutSeconds";
+        private const string SelectedDefinesPresetKey = "LumenvilLite.SelectedDefinesPreset";
 
         public const string DefaultHost = "localhost";
         public const int DefaultPort = 5151;
@@ -37,6 +38,12 @@ namespace LumenvilLite.Settings
         {
             get => EditorPrefs.GetFloat(TimeoutKey, DefaultTimeout);
             set => EditorPrefs.SetFloat(TimeoutKey, value);
+        }
+
+        public static string SelectedDefinesPreset
+        {
+            get => EditorPrefs.GetString(SelectedDefinesPresetKey, string.Empty);
+            set => EditorPrefs.SetString(SelectedDefinesPresetKey, value);
         }
 
         public static string BaseUrl => $"http://{Host}:{Port}";

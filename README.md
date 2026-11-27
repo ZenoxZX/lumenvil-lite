@@ -160,6 +160,16 @@ Post-build steps see the build outcome in their environment: `LUMENVIL_OUTCOME`,
 
 Manage both lists from the editor window via **Edit Steps...** — the popup has Pre-build / Post-build tabs. Steps live in `projects.json` on the server, so every client that talks to the same server sees the same lists. The build response and `last-build.json` both carry `preBuildResults` and `postBuildResults` arrays (stdout / stderr / exit code per step). The Build status panel renders these as foldouts with **Copy** buttons.
 
+## Defines presets
+
+The **Defines** field on the Build Trigger card has a **Preset** row above it: a dropdown, a **Save** button and a **⋮** menu. Picking a preset fills the field with its semicolon-separated define list; **Custom** leaves the field free for manual entry.
+
+- **Save** is enabled once the field no longer matches the selected preset and writes the edit back into it.
+- **⋮ → Save as New…** stores the current field as a new preset; **⋮ → Rename…** renames the selected one. Both open a small name dialog (Enter saves, Esc cancels) that rejects empty and duplicate names.
+- **⋮ → Revert** restores the field from the selected preset; **⋮ → Delete** removes it after a confirmation.
+
+Presets live in the Unity project at `ProjectSettings/Packages/com.zenoxzx.lumenvil-lite/DefinesPresets.json`, so committing that file shares the same lists with everyone on the project. The last selected preset is remembered per user (`EditorPrefs`) and restored when the window opens. The **Start build** confirmation shows which preset is in use and flags it as *modified* when the field was edited.
+
 ## Build script contract
 
 `POST /build/start` invokes Unity in batch mode and runs your registered `executeMethod`.

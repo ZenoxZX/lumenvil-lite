@@ -43,6 +43,7 @@ namespace LumenvilLite
         private int _selectedTargetIndex;
         private int _selectedBackendIndex;
         private string _buildDefines = string.Empty;
+        private DefinesPresetField _definesPresetField;
         private bool _useGitSteps;
         private bool _usePostSteps;
         private bool _development;
@@ -77,6 +78,9 @@ namespace LumenvilLite
         {
             _client = new LumenvilLiteClient();
             _pollCts = new CancellationTokenSource();
+            _definesPresetField = new DefinesPresetField(this);
+            _definesPresetField.Reload();
+            _buildDefines = _definesPresetField.SelectedDefines ?? _buildDefines;
             EditorApplication.update += OnEditorUpdate;
         }
 
@@ -395,9 +399,7 @@ namespace LumenvilLite
             _selectedBackendIndex = EditorGUILayout.Popup("Backend", _selectedBackendIndex, BuildBackends);
 
             // Defines.
-            _buildDefines = EditorGUILayout.TextField(
-                new GUIContent("Defines", "Optional, semicolon-separated. Leave empty to skip."),
-                _buildDefines);
+            _buildDefines = _definesPresetField.Draw(_buildDefines);
 
             // Build flags. Development is the master switch — the other three
             // are no-ops in a release build, so we disable + force-false them
@@ -554,6 +556,7 @@ namespace LumenvilLite
                 stepsPart +
                 $"Target:  {target}\n" +
                 $"Backend: {backend}\n" +
+                $"Preset:  {_definesPresetField.DescribeSelection(_buildDefines)}\n" +
                 (string.IsNullOrEmpty(defines) ? string.Empty : $"Defines: {defines}\n") +
                 (string.IsNullOrEmpty(flagsLabel) ? string.Empty : $"Flags:   {flagsLabel}\n") +
                 methodLabel;

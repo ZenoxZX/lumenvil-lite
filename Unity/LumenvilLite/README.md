@@ -11,6 +11,7 @@ This is the Unity-side half of the project. The companion .NET 8 server lives at
 - **Build status panel** — idle / building / success / failed / cancelled, current phase, last log line, foldout log tail
 - **Build-finished notification** — Unity in-editor notification + beep when status leaves "Building"
 - **Settings** — host, port, poll interval, timeout (persisted in `EditorPrefs`)
+- **Defines presets** — pick a saved define list from a dropdown, or save, rename and delete presets; stored per project in `ProjectSettings/Packages/com.zenoxzx.lumenvil-lite/DefinesPresets.json`
 
 ## Installation (Package Manager — Git URL)
 
