@@ -5,6 +5,13 @@ All notable changes to the Lumenvil Lite Unity package are documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] — Unreleased
+
+### Added
+- **Defines presets** on the Build Trigger card. A **Preset** dropdown fills the Defines field from a saved list; **Custom** keeps manual entry. **Save** writes edits back into the selected preset; the **⋮** menu holds **Save as New…**, **Rename…**, **Revert** and **Delete**. New and renamed presets are named in a small dialog that rejects empty and duplicate names.
+- Presets are stored per Unity project in `ProjectSettings/Packages/com.zenoxzx.lumenvil-lite/DefinesPresets.json` so they can be committed and shared. The last selected preset is remembered per user in `EditorPrefs`.
+- The **Start build** confirmation dialog shows the preset in use, marked *modified* when the field differs from it.
+
 ## [0.4.0] — Unreleased
 
 ### Added
